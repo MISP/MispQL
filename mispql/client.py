@@ -30,10 +30,11 @@ class QueryErrors(Exception):
 
 
 class Client:
-    def __init__(self, settings, session=None):
+    def __init__(self, settings, session=None, trace=None):
         if not settings.key:
             raise ClientError('no API key: set key in a config file, MISPQL_KEY or --key-file')
         self.settings = settings
+        self.trace = trace  # called with method, URL and body before each request
         self.session = session or requests.Session()
         self.session.headers.update({
             'Authorization': settings.key,
@@ -75,6 +76,8 @@ class Client:
 
     def post(self, endpoint, body, stream=False):
         url = self.settings.url.rstrip('/') + endpoint
+        if self.trace:
+            self.trace('POST', url, body)
         try:
             response = self.session.post(url, json=body, stream=stream,
                                          timeout=(CONNECT_TIMEOUT, self.settings.timeout))
