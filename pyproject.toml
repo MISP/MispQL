@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mispql"
+dynamic = ["version"]
+description = "SQL-like command-line client for the MISP REST API"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Andras Iklody" }, { name = "CIRCL" }]
+requires-python = ">=3.11"
+dependencies = ["requests", "prompt_toolkit"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+mispql = "mispql.cli:main"
+
+[tool.setuptools]
+packages = ["mispql"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mispql.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
