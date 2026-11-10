@@ -1,0 +1,187 @@
+import json
+import socket
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+import pytest
+
+from mispql.client import Client, ClientError, QueryErrors
+from mispql.compiler import compile_statement
+from mispql.config import Settings
+from mispql.parser import parse
+
+SERVER_ERRORS = Path(__file__).parent / 'server_errors'
+
+
+class Stub:
+    """A MISP stand-in: answers each POST with the next queued reply and records the request."""
+
+    def __init__(self):
+        self.replies = []
+        self.requests = []
+
+    def reply(self, payload, status=200, headers=None, delay=0):
+        self.replies.append((status, headers or {}, payload, delay))
+
+
+@pytest.fixture
+def stub():
+    stub = Stub()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            stub.requests.append({'path': self.path, 'headers': dict(self.headers), 'body': json.loads(body)})
+            status, headers, payload, delay = stub.replies.pop(0)
+            time.sleep(delay)
+            data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+            self.send_response(status)
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    stub.url = f'http://127.0.0.1:{server.server_port}'
+    yield stub
+    server.shutdown()
+    server.server_close()
+
+
+def client(url, **settings):
+    return Client(Settings(url=url, key='the-key', **settings))
+
+
+def plan_of(text):
+    return compile_statement(parse(text)[0])
+
+
+def test_search(stub):
+    plan = plan_of("SELECT * FROM attributes WHERE type = 'md5' LIMIT 10")
+    stub.reply({'response': {'Attribute': [{'id': '1'}, {'id': '2'}]}})
+    assert client(stub.url + '/').run(plan) == [{'id': '1'}, {'id': '2'}]
+    [request] = stub.requests
+    assert request['path'] == '/attributes/restSearch'
+    assert request['body'] == plan.body
+    headers = request['headers']
+    assert (headers['Authorization'], headers['Accept'], headers['Content-Type'], headers['User-Agent']) == (
+        'the-key', 'application/json', 'application/json', 'mispql/0.1.0')
+
+
+def test_rows_are_unwrapped(stub):
+    stub.reply({'response': [{'Event': {'id': '7'}}]})
+    stub.reply({'response': [{'Object': {'id': '9'}}]})
+    stub.reply({'response': {'Attribute': []}})
+    stub.reply({'response': []})
+    c = client(stub.url)
+    assert c.run(plan_of('SELECT * FROM events LIMIT 1')) == [{'id': '7'}]
+    assert c.run(plan_of('SELECT * FROM objects LIMIT 1')) == [{'id': '9'}]
+    assert c.run(plan_of('SELECT * FROM attributes LIMIT 1')) == []
+    assert c.run(plan_of('SELECT * FROM events LIMIT 1')) == []
+
+
+def test_unaligned_offset_reads_two_pages(stub):
+    plan = plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 4')
+    stub.reply({'response': {'Attribute': [{'id': i} for i in (3, 4, 5)]}})
+    stub.reply({'response': {'Attribute': [{'id': i} for i in (6, 7, 8)]}})
+    assert client(stub.url).run(plan) == [{'id': 4}, {'id': 5}, {'id': 6}]
+    assert [r['body']['page'] for r in stub.requests] == [2, 3]
+    assert {r['body']['limit'] for r in stub.requests} == {3}
+
+
+def test_unaligned_offset_stops_after_a_short_page(stub):
+    stub.reply({'response': {'Attribute': [{'id': 3}, {'id': 4}]}})
+    assert client(stub.url).run(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 4')) == [{'id': 4}]
+    assert len(stub.requests) == 1
+
+
+def test_verbatim_format_returns_the_response(stub):
+    stub.reply(b'uuid,value\nabc,1.2.3.4\n', headers={'Content-Type': 'text/csv'})
+    response = client(stub.url).run(plan_of('SELECT * FROM attributes LIMIT 5 FORMAT csv'))
+    assert b''.join(response.iter_content(4)) == b'uuid,value\nabc,1.2.3.4\n'
+    assert stub.requests[0]['body']['returnFormat'] == 'csv'
+
+
+def test_counts(stub):
+    stub.reply({'response': [{'Event': {'id': '1'}}]}, headers={'X-Result-Count': '6375'})
+    stub.reply(b'73890')
+    c = client(stub.url)
+    assert c.run(plan_of('SELECT COUNT(*) FROM events WHERE id > 0')) == 6375
+    assert c.run(plan_of("SELECT COUNT(*) FROM attributes WHERE type = 'md5'")) == 73890
+    stub.reply({'response': []})
+    with pytest.raises(ClientError, match='no count in the answer'):
+        c.run(plan_of('SELECT COUNT(*) FROM events WHERE id > 0'))
+
+
+def test_query_errors_point_at_the_statement(stub):
+    capture = json.loads((SERVER_ERRORS / 'attribute_leaves.json').read_text())
+    text = capture['statement']
+    reply = capture['reply']
+    reply['errors'].append({'path': 'limit', 'code': 'bad_type', 'message': 'somewhere else'})
+    stub.reply(reply, status=400)
+    statement = parse(text)[0]
+    plan = compile_statement(statement)
+    with pytest.raises(QueryErrors) as exc:
+        client(stub.url).run(plan)
+    located = [(e.message, text[e.start:e.end]) for e in exc.value.located(plan, statement)]
+    assert located == [
+        ('unknown field', 'nosuch'),
+        ('this field expects an integer', "id = 'x'"),
+        ('this field expects a non-empty string', "type IN ('a', 5)"),
+        ('LIKE takes a leading and/or trailing %, nothing else', "value NOT LIKE 'a%b'"),
+        ('operator not allowed for this field', "id LIKE '1%'"),
+        ('somewhere else', text),
+    ]
+
+
+@pytest.mark.parametrize('status, payload, message', [
+    (403, {'name': 'Forbidden', 'message': 'You do not have the permission to use complex queries.'},
+     'HTTP 403: You do not have the permission to use complex queries.'),
+    (404, {'name': 'Invalid output format.', 'message': 'Invalid output format.'},
+     'HTTP 404: Invalid output format.'),
+    (400, {'name': 'Bad request', 'message': 'The query parameter is only accepted as a JSON object in a POST body.'},
+     'HTTP 400: The query parameter is only accepted as a JSON object in a POST body.'),
+    (500, b'<pre class="cake-error">Warning</pre>', 'HTTP 500'),
+    (502, [], 'HTTP 502'),
+])
+def test_http_errors(stub, status, payload, message):
+    stub.reply(payload, status=status)
+    with pytest.raises(ClientError) as exc:
+        client(stub.url).run(plan_of('SELECT * FROM events LIMIT 1'))
+    assert str(exc.value) == message
+
+
+def test_unexpected_answer(stub):
+    stub.reply(b'not json')
+    with pytest.raises(ClientError, match='/events/restSearch: unexpected answer'):
+        client(stub.url).run(plan_of('SELECT * FROM events LIMIT 1'))
+
+
+def test_timeout(stub):
+    stub.reply({'response': []}, delay=0.5)
+    with pytest.raises(ClientError) as exc:
+        client(stub.url, timeout=0.1).run(plan_of('SELECT * FROM events LIMIT 1'))
+    assert str(exc.value) == f'no answer from {stub.url}/events/restSearch within 0.1 s'
+
+
+def test_connection_refused():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        port = s.getsockname()[1]
+    with pytest.raises(ClientError) as exc:
+        client(f'http://127.0.0.1:{port}').run(plan_of('SELECT * FROM events LIMIT 1'))
+    assert str(exc.value) == f'cannot reach http://127.0.0.1:{port}/events/restSearch'
+
+
+def test_settings_reach_the_session():
+    c = Client(Settings(url='https://misp', key='k', verify_ssl='/etc/ca.pem'))
+    assert c.session.verify == '/etc/ca.pem'
+    with pytest.raises(ClientError, match='no API key'):
+        Client(Settings(url='https://misp'))
