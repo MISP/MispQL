@@ -93,6 +93,14 @@ class Client:
         return response
 
 
+def chunks(response, size=65536):
+    """The body of an unread response, piece by piece."""
+    try:
+        yield from response.iter_content(size)
+    except requests.exceptions.RequestException as e:
+        raise ClientError(f'{response.url}: the answer broke off: {e}') from None
+
+
 def _failure(response):
     try:
         reply = response.json()

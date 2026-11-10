@@ -137,8 +137,12 @@ class _Parser:
         first = self.name('a field name')
         if not self.symbol('.'):
             return nodes.Field(name=first.value, start=first.start, end=first.end)
-        second = self.name('a field name')
-        return nodes.Field(table=first.value, name=second.value, start=first.start, end=second.end)
+        rest = [self.name('a field name')]
+        while self.symbol('.'):
+            rest.append(self.name('a field name'))
+        # Columns can reach deeper into a row (Event.Orgc.name): the first part is the qualifier.
+        return nodes.Field(table=first.value, name='.'.join(part.value for part in rest),
+                           start=first.start, end=rest[-1].end)
 
     def order_item(self):
         field = self.field()

@@ -68,6 +68,9 @@ def test_booleans_stay_booleans():
 
 def test_qualified_field():
     assert where("attributes.type = 'x'").field == Field(table='attributes', name='type')
+    assert one('SELECT Event.Orgc.name, `Event`.`Orgc` FROM attributes').columns == [
+        Field(table='event', name='orgc.name'), Field(table='Event', name='Orgc'),
+    ]
 
 
 def test_precedence():
