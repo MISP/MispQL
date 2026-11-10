@@ -1,0 +1,29 @@
+{
+  "statement": "SELECT * FROM events WHERE tags NOT LIKE 'tlp:%' LIMIT 1",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 1,
+    "page": 1,
+    "query": {
+      "NOT": {
+        "tags": {
+          "LIKE": "tlp:%"
+        }
+      }
+    }
+  },
+  "status": 400,
+  "reply": {
+    "name": "Invalid query",
+    "message": "1 error",
+    "url": "/events/restSearch",
+    "errors": [
+      {
+        "path": "query.NOT.tags",
+        "code": "bad_shape",
+        "message": "NOT cannot hold attribute, object or tag fields when searching events; use != on tags"
+      }
+    ]
+  }
+}

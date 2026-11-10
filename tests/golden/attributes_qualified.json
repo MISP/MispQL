@@ -1,0 +1,31 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "query": {
+      "AND": [
+        {
+          "type": "ip-dst"
+        },
+        {
+          "id": {
+            ">": 50000
+          }
+        }
+      ]
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "attributes.type = 'ip-dst' AND attributes.id > 50000",
+    "query.AND[0]": "attributes.type = 'ip-dst'",
+    "query.AND[0].<unknown>": "attributes.type",
+    "query.AND[1]": "attributes.id > 50000",
+    "query.AND[1].<unknown>": "attributes.id"
+  }
+}

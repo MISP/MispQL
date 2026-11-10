@@ -1,0 +1,6 @@
+{
+  "plan": "DescribePlan",
+  "table": "objects",
+  "endpoint": "/objects/queryDescribe",
+  "spans": {}
+}

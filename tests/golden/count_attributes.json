@@ -1,0 +1,22 @@
+{
+  "plan": "CountPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "ignore": 1,
+    "query": {
+      "type": {
+        "IN": [
+          "ip-src",
+          "ip-dst"
+        ]
+      }
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "type in ('ip-src', 'ip-dst')",
+    "query.<unknown>": "type"
+  }
+}

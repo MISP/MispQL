@@ -1,0 +1,66 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 5,
+    "page": 1,
+    "query": {
+      "AND": [
+        {
+          "NOT": {
+            "OR": [
+              {
+                "type": "domain"
+              },
+              {
+                "NOT": {
+                  "tags": {
+                    "LIKE": "tlp:%"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "OR": [
+            {
+              "event_id": 1
+            },
+            {
+              "NOT": {
+                "NOT": {
+                  "value": {
+                    "LIKE": "%x"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "NOT (type = 'domain' OR NOT tags LIKE 'tlp:%')\n  AND (event_id = 1 OR NOT value NOT LIKE '%x')",
+    "query.AND[0]": "NOT (type = 'domain' OR NOT tags LIKE 'tlp:%')",
+    "query.AND[0].NOT": "type = 'domain' OR NOT tags LIKE 'tlp:%'",
+    "query.AND[0].NOT.OR[0]": "type = 'domain'",
+    "query.AND[0].NOT.OR[0].<unknown>": "type",
+    "query.AND[0].NOT.OR[1]": "NOT tags LIKE 'tlp:%'",
+    "query.AND[0].NOT.OR[1].NOT": "tags LIKE 'tlp:%'",
+    "query.AND[0].NOT.OR[1].NOT.<unknown>": "tags",
+    "query.AND[1]": "event_id = 1 OR NOT value NOT LIKE '%x'",
+    "query.AND[1].OR[0]": "event_id = 1",
+    "query.AND[1].OR[0].<unknown>": "event_id",
+    "query.AND[1].OR[1]": "NOT value NOT LIKE '%x'",
+    "query.AND[1].OR[1].NOT": "value NOT LIKE '%x'",
+    "query.AND[1].OR[1].NOT.NOT.<unknown>": "value"
+  }
+}

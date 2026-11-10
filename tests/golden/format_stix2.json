@@ -1,0 +1,36 @@
+{
+  "plan": "SearchPlan",
+  "table": "objects",
+  "endpoint": "/objects/restSearch",
+  "body": {
+    "returnFormat": "stix2",
+    "ignore": 1,
+    "query": {
+      "AND": [
+        {
+          "object_name": {
+            "IN": [
+              "domain-ip",
+              "url"
+            ]
+          }
+        },
+        {
+          "event_timestamp": {
+            ">=": "7d"
+          }
+        }
+      ]
+    }
+  },
+  "output": "verbatim",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "object_name IN ('domain-ip', 'url') AND event_timestamp >= '7d'",
+    "query.AND[0]": "object_name IN ('domain-ip', 'url')",
+    "query.AND[0].<unknown>": "object_name",
+    "query.AND[1]": "event_timestamp >= '7d'",
+    "query.AND[1].<unknown>": "event_timestamp"
+  }
+}

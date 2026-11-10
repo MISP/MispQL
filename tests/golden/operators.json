@@ -1,0 +1,111 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 50,
+    "page": 1,
+    "query": {
+      "AND": [
+        {
+          "id": {
+            "!=": 1
+          }
+        },
+        {
+          "event_id": {
+            "<": 10
+          }
+        },
+        {
+          "object_id": {
+            ">": 0
+          }
+        },
+        {
+          "distribution": {
+            "<=": 3
+          }
+        },
+        {
+          "timestamp": {
+            ">=": "7d"
+          }
+        },
+        {
+          "to_ids": true
+        },
+        {
+          "published": {
+            "!=": false
+          }
+        },
+        {
+          "threat_level_id": {
+            "IN": [
+              1,
+              2
+            ]
+          }
+        },
+        {
+          "type": {
+            "NOT IN": [
+              "comment",
+              "other"
+            ]
+          }
+        },
+        {
+          "value": {
+            "LIKE": "%.example.com"
+          }
+        },
+        {
+          "NOT": {
+            "comment": {
+              "LIKE": "test%"
+            }
+          }
+        },
+        {
+          "id": {
+            ">": -1
+          }
+        }
+      ]
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "id != 1 AND event_id < 10 AND object_id > 0 AND distribution <= 3 AND timestamp >= '7d'\n  AND to_ids = TRUE AND published <> false AND threat_level_id IN (1, 2)\n  AND type NOT IN ('comment', \"other\") AND value LIKE '%.example.com'\n  AND comment NOT LIKE 'test%' AND id > -1",
+    "query.AND[0]": "id != 1",
+    "query.AND[0].<unknown>": "id",
+    "query.AND[1]": "event_id < 10",
+    "query.AND[1].<unknown>": "event_id",
+    "query.AND[2]": "object_id > 0",
+    "query.AND[2].<unknown>": "object_id",
+    "query.AND[3]": "distribution <= 3",
+    "query.AND[3].<unknown>": "distribution",
+    "query.AND[4]": "timestamp >= '7d'",
+    "query.AND[4].<unknown>": "timestamp",
+    "query.AND[5]": "to_ids = TRUE",
+    "query.AND[5].<unknown>": "to_ids",
+    "query.AND[6]": "published <> false",
+    "query.AND[6].<unknown>": "published",
+    "query.AND[7]": "threat_level_id IN (1, 2)",
+    "query.AND[7].<unknown>": "threat_level_id",
+    "query.AND[8]": "type NOT IN ('comment', \"other\")",
+    "query.AND[8].<unknown>": "type",
+    "query.AND[9]": "value LIKE '%.example.com'",
+    "query.AND[9].<unknown>": "value",
+    "query.AND[10]": "comment NOT LIKE 'test%'",
+    "query.AND[10].NOT.<unknown>": "comment",
+    "query.AND[11]": "id > -1",
+    "query.AND[11].<unknown>": "id"
+  }
+}

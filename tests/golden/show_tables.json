@@ -1,0 +1,9 @@
+{
+  "plan": "ShowTablesPlan",
+  "endpoints": {
+    "attributes": "/attributes/queryDescribe",
+    "events": "/events/queryDescribe",
+    "objects": "/objects/queryDescribe"
+  },
+  "spans": {}
+}

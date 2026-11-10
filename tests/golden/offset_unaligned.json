@@ -1,0 +1,21 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 10,
+    "page": 3,
+    "query": {
+      "type": "md5"
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 5,
+  "spans": {
+    "query": "type = 'md5'",
+    "query.<unknown>": "type"
+  }
+}

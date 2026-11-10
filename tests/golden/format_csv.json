@@ -1,0 +1,21 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "csv",
+    "ignore": 1,
+    "limit": 1000,
+    "page": 1,
+    "query": {
+      "to_ids": true
+    }
+  },
+  "output": "verbatim",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "to_ids = TRUE",
+    "query.<unknown>": "to_ids"
+  }
+}

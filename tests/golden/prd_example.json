@@ -1,0 +1,56 @@
+{
+  "plan": "SearchPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 20,
+    "page": 3,
+    "order": [
+      "info desc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "date": {
+            ">=": "30d"
+          }
+        },
+        {
+          "OR": [
+            {
+              "type": "btc"
+            },
+            {
+              "object_name": "bank-account"
+            }
+          ]
+        },
+        {
+          "tags": {
+            "NOT IN": [
+              "tlp:red"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "date >= '30d' AND (type = 'btc' OR object_name = 'bank-account')\n  AND tags NOT IN ('tlp:red')",
+    "query.AND[0]": "date >= '30d'",
+    "query.AND[0].<unknown>": "date",
+    "query.AND[1]": "type = 'btc' OR object_name = 'bank-account'",
+    "query.AND[1].OR[0]": "type = 'btc'",
+    "query.AND[1].OR[0].<unknown>": "type",
+    "query.AND[1].OR[1]": "object_name = 'bank-account'",
+    "query.AND[1].OR[1].<unknown>": "object_name",
+    "query.AND[2]": "tags NOT IN ('tlp:red')",
+    "query.AND[2].<unknown>": "tags",
+    "order[0]": "eventinfo DESC"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "plan": "SearchPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 5,
+    "page": 1,
+    "order": [
+      "info asc",
+      "timestamp desc",
+      "id asc",
+      "publish_timestamp asc"
+    ]
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "order[0]": "eventinfo",
+    "order[1]": "event_timestamp DESC",
+    "order[2]": "event_id",
+    "order[3]": "publish_timestamp"
+  }
+}

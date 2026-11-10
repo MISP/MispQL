@@ -1,0 +1,18 @@
+{
+  "plan": "SearchPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 3,
+    "page": 1
+  },
+  "output": "default",
+  "columns": [
+    "id",
+    "info"
+  ],
+  "skip": 0,
+  "spans": {}
+}

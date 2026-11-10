@@ -1,0 +1,24 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "query": {
+      "event_id": 1
+    }
+  },
+  "output": "flat",
+  "columns": [
+    "id",
+    "value",
+    "event.info",
+    "object.name"
+  ],
+  "skip": 0,
+  "spans": {
+    "query": "event_id = 1",
+    "query.<unknown>": "event_id"
+  }
+}

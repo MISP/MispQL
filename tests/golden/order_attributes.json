@@ -1,0 +1,27 @@
+{
+  "plan": "SearchPlan",
+  "table": "attributes",
+  "endpoint": "/attributes/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "order": [
+      "Event.publish_timestamp desc",
+      "type asc",
+      "value asc"
+    ],
+    "query": {
+      "event_id": 5
+    }
+  },
+  "output": "default",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "event_id = 5",
+    "query.<unknown>": "event_id",
+    "order[0]": "publish_timestamp DESC",
+    "order[1]": "attributes.type",
+    "order[2]": "value ASC"
+  }
+}

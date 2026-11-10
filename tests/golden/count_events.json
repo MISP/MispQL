@@ -1,0 +1,32 @@
+{
+  "plan": "CountPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 1,
+    "page": 1,
+    "metadata": 1,
+    "query": {
+      "AND": [
+        {
+          "tags": "tlp:white"
+        },
+        {
+          "date": {
+            ">=": "2026-01-01"
+          }
+        }
+      ]
+    }
+  },
+  "source": "header",
+  "spans": {
+    "query": "tags = 'tlp:white' AND date >= '2026-01-01'",
+    "query.AND[0]": "tags = 'tlp:white'",
+    "query.AND[0].<unknown>": "tags",
+    "query.AND[1]": "date >= '2026-01-01'",
+    "query.AND[1].<unknown>": "date"
+  }
+}

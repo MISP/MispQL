@@ -1,0 +1,34 @@
+{
+  "statement": "SELECT * FROM objects WHERE NOT value = 'x' OR object_name = 'url' LIMIT 1",
+  "body": {
+    "returnFormat": "json",
+    "ignore": 1,
+    "limit": 1,
+    "page": 1,
+    "query": {
+      "OR": [
+        {
+          "NOT": {
+            "value": "x"
+          }
+        },
+        {
+          "object_name": "url"
+        }
+      ]
+    }
+  },
+  "status": 400,
+  "reply": {
+    "name": "Invalid query",
+    "message": "1 error",
+    "url": "/objects/restSearch",
+    "errors": [
+      {
+        "path": "query.OR[0].NOT.value",
+        "code": "bad_shape",
+        "message": "NOT cannot hold attribute or tag fields when searching objects; use != on tags"
+      }
+    ]
+  }
+}
