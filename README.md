@@ -10,8 +10,8 @@ mispql -e "SELECT * FROM attributes WHERE type = 'ip-dst' AND id > 50000 LIMIT 1
 Every query goes through the API as the user whose key it uses, so it sees
 exactly what that user may see. Read-only.
 
-**Status**: early development; batch mode works, the interactive prompt does
-not yet. Needs a MISP 3.0 server (the `query` key of restSearch).
+**Status**: early development. Needs a MISP 3.0 server (the `query` key of
+restSearch).
 
 `SHOW TABLES` lists the tables you may query, `DESCRIBE events` their fields,
 operators and the names `ORDER BY` takes. Both, and every `WHERE`, need the
@@ -20,6 +20,7 @@ Complex query permission (or a site admin).
 ## Usage
 
 ```
+mispql                                # interactive, at a terminal
 mispql -e "SELECT ...; SELECT ...;"   # statements on the command line
 mispql script.mql                     # statements from a file
 mispql < script.mql                   # or from stdin
@@ -27,6 +28,12 @@ mispql < script.mql                   # or from stdin
 
 Every statement is checked before the first one is sent; the script stops at
 the first error. Results go to stdout, errors and warnings to stderr.
+
+At the interactive prompt, Enter runs the input once it ends with `;`
+(Alt-Enter runs it as it is); Tab completes keywords, tables and the fields of
+the table after `FROM`. `help` lists the syntax, Ctrl-C clears the input or
+stops a running query, `quit` or Ctrl-D leaves. History is kept in
+`~/.local/state/mispql/history` (`$XDG_STATE_HOME`), readable by you alone.
 
 | Option | |
 |---|---|

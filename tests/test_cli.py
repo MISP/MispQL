@@ -6,11 +6,12 @@ import sys
 
 import pytest
 
-from mispql import __version__, config
+from mispql import __version__
 from mispql.cli import main
 from mispql.client import Client
 
 ROWS = {'response': {'Attribute': [{'id': '1', 'type': 'md5'}]}}
+pytestmark = pytest.mark.usefixtures('no_config')
 
 
 class FakeStdin:
@@ -20,14 +21,6 @@ class FakeStdin:
 
     def isatty(self):
         return self.tty
-
-
-@pytest.fixture(autouse=True)
-def no_config(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, 'REPO_CONFIG', tmp_path / 'absent.toml')
-    monkeypatch.setenv('HOME', str(tmp_path))
-    for name in ('MISPQL_CONFIG', 'MISPQL_URL', 'MISPQL_KEY'):
-        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -84,7 +77,6 @@ def test_input_from_a_file_or_stdin(misp, run, tmp_path, how):
 
 
 @pytest.mark.parametrize('argv, stdin, tty, message', [
-    ([], b'', True, 'ERROR: interactive mode is not built yet: use -e TEXT, a file or a pipe'),
     (['-e', 'SELECT 1', 'x.mql'], b'', False, 'ERROR: give -e or a file, not both'),
     (['/nonexistent.mql'], b'', False, 'ERROR: /nonexistent.mql: No such file or directory'),
     ([], b'SELECT \xff', False, 'ERROR: stdin: not UTF-8 (byte 7)'),

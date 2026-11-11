@@ -53,41 +53,49 @@ def _arguments():
 
 
 def _main(args):
+    if args.execute is None and args.file is None and sys.stdin.isatty():
+        from mispql import repl
+        return repl.main(args)
     try:
         text = _read_input(args)
     except UsageError as e:
-        _stderr(f'ERROR: {e}')
+        stderr(f'ERROR: {e}')
         return USAGE
+    return run(text, lambda: connect(args), args.dry_run)
+
+
+def run(text, get_client, dry_run=False):
+    """Check every statement in `text`, then run them in order; returns an exit code."""
     try:
         statements = parse(text)
         plans = [compile_statement(statement) for statement in statements]
     except MispQLError as e:
-        _stderr(e.render(text))
+        stderr(e.render(text))
         return FAILED
-    if args.dry_run:
+    if dry_run:
         for plan in plans:
             _dry_run(plan)
         return OK
     if not plans:
         return OK
     try:
-        client = _client(args)
+        client = get_client()
     except (config.ConfigError, ClientError) as e:
-        _stderr(f'ERROR: {e}')
+        stderr(f'ERROR: {e}')
         return USAGE
     for statement, plan in zip(statements, plans):
         try:
             warnings = write(plan, client.run(plan), sys.stdout.buffer)
         except QueryErrors as e:
-            _stderr('\n'.join(error.render(text) for error in e.located(plan, statement)))
+            stderr('\n'.join(error.render(text) for error in e.located(plan, statement)))
             return FAILED
         except ClientError as e:
             line, column = position(text, statement.start)
-            _stderr(f'ERROR {line}:{column}: {e}')
+            stderr(f'ERROR {line}:{column}: {e}')
             return FAILED
         sys.stdout.flush()
         for warning in warnings:
-            _stderr(f'WARNING: {warning}')
+            stderr(f'WARNING: {warning}')
     return OK
 
 
@@ -105,8 +113,6 @@ def _read_input(args):
             return _decode(Path(args.file).read_bytes(), args.file)
         except OSError as e:
             raise UsageError(f'{args.file}: {e.strerror}') from None
-    if args.file is None and sys.stdin.isatty():
-        raise UsageError('interactive mode is not built yet: use -e TEXT, a file or a pipe')
     return _decode(sys.stdin.buffer.read(), 'stdin')
 
 
@@ -117,16 +123,16 @@ def _decode(data, name):
         raise UsageError(f'{name}: not UTF-8 (byte {e.start})') from None
 
 
-def _client(args):
+def connect(args):
     settings = config.load(args.config, args.profile, args.key_file)
     for warning in settings.warnings:
-        _stderr(f'WARNING: {warning}')
+        stderr(f'WARNING: {warning}')
     if not settings.key and sys.stdin.isatty():
         try:
             settings.key = getpass.getpass('MISP API key: ').strip() or None
         except EOFError:
             pass
-    trace = (lambda method, url, body: _stderr(_request(method, url, body))) if args.verbose else None
+    trace = (lambda method, url, body: stderr(_request(method, url, body))) if args.verbose else None
     return Client(settings, trace=trace)
 
 
@@ -150,7 +156,7 @@ def _request(method, target, body=None, note=''):
     return f'{method} {target}{note}\n{json.dumps(body, indent=2, ensure_ascii=False)}'
 
 
-def _stderr(message):
+def stderr(message):
     # Keep stdout and stderr in order on a terminal.
     sys.stdout.flush()
     print(message, file=sys.stderr, flush=True)
