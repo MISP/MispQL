@@ -43,6 +43,7 @@ def main(args):
         prompt_continuation=lambda width, line_number, wrap_count: '-> '.rjust(width),
         history=_history(),
         completer=ThreadedCompleter(completions),
+        complete_while_typing=False,
     )
     where = 'dry run: nothing is sent' if client is None else client.settings.url
     print(f'mispql {__version__}, {where}. End statements with ;  help for help, quit to leave.')
@@ -88,9 +89,9 @@ class Completions(Completer):
         self.lock = threading.Lock()
 
     def get_completions(self, document, complete_event):
-        word = re.search(r'\w*$', document.text_before_cursor).group()
-        if not word and not complete_event.completion_requested:
+        if _in_string(document.text_before_cursor):
             return
+        word = re.search(r'\w*$', document.text_before_cursor).group()
         for candidate in [*sorted(KEYWORDS), *TABLES, *self.table_fields(_statement_table(document))]:
             if candidate.lower().startswith(word.lower()):
                 yield Completion(candidate, start_position=-len(word))
@@ -106,6 +107,15 @@ class Completions(Completer):
                 except ClientError:
                     self.fields[table] = []
             return self.fields[table]
+
+
+def _in_string(text):
+    """Whether `text` ends inside an open '...' or "..." string (a `name` still completes)."""
+    try:
+        tokenize(text)
+    except MispQLError as e:
+        return e.at_end and text[e.start] in '\'"'
+    return False
 
 
 def _statement_table(document):

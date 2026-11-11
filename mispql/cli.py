@@ -39,7 +39,8 @@ def _arguments():
         description='Query MISP in MispQL, an SQL-like language, over its REST API.',
     )
     parser.add_argument('file', nargs='?', metavar='FILE',
-                        help='a file of statements; - or no FILE reads stdin when it is not a terminal')
+                        help='a file of statements, - for stdin; without one, the interactive prompt '
+                             'at a terminal, else stdin')
     parser.add_argument('-e', '--execute', metavar='TEXT', help='run these statements')
     parser.add_argument('--config', metavar='PATH', help='the config file to use')
     parser.add_argument('--profile', metavar='NAME', help='the profile (table) in the config file')
@@ -53,7 +54,7 @@ def _arguments():
 
 
 def _main(args):
-    if args.execute is None and args.file is None and sys.stdin.isatty():
+    if args.execute is None and args.file is None and sys.stdin.isatty() and sys.stdout.isatty():
         from mispql import repl
         return repl.main(args)
     try:

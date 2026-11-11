@@ -64,14 +64,15 @@ def test_statements_run_in_order(misp, run):
     assert [r['body'].get('returnFormat') for r in misp.requests] == ['json', 'count']
 
 
-@pytest.mark.parametrize('how', ['file', 'dash', 'pipe'])
+@pytest.mark.parametrize('how', ['file', 'dash', 'pipe', 'terminal'])
 def test_input_from_a_file_or_stdin(misp, run, tmp_path, how):
     script = b'\xef\xbb\xbfSELECT * FROM attributes LIMIT 1;\n'
     path = tmp_path / 'script.mql'
     path.write_bytes(script)
-    argv = {'file': [str(path)], 'dash': ['-'], 'pipe': []}[how]
+    argv = {'file': [str(path)], 'dash': ['-'], 'pipe': [], 'terminal': []}[how]
     misp.reply(ROWS)
-    code, out, err = run(*argv, stdin=b'' if how == 'file' else script)
+    # 'terminal': stdin at a terminal, stdout not (mispql > out): no prompt, stdin is the script.
+    code, out, err = run(*argv, stdin=b'' if how == 'file' else script, tty=how == 'terminal')
     assert (code, err) == (0, '')
     assert json.loads(out) == ROWS['response']['Attribute']
 
@@ -113,7 +114,7 @@ def test_describe_and_show_tables(misp, run):
     assert code == 0
     assert out.endswith('1 field\nORDER BY: none\nlimits: max_depth 5\n'
                         '+------------+\n| table      |\n+------------+\n| attributes |\n| objects    |\n'
-                        '+------------+\n2 rows\n')
+                        '+------------+\n2 tables\n')
     assert err == ''.join(f'GET {misp.url}/{table}/queryDescribe\n'
                           for table in ('objects', 'attributes', 'events', 'objects'))
 

@@ -139,7 +139,7 @@ def _describe(plan, found, out):
 
 
 def _show_tables(plan, tables, out):
-    _box(['table'], [[table] for table in tables], out)
+    _box(['table'], [[table] for table in tables], out, 'table')
     return []
 
 

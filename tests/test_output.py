@@ -189,5 +189,5 @@ def test_describe():
 
 def test_show_tables():
     assert render('SHOW TABLES', ['attributes', 'events'])[0] == (
-        '+------------+\n| table      |\n+------------+\n| attributes |\n| events     |\n+------------+\n2 rows\n')
-    assert render('SHOW TABLES', [])[0] == '+-------+\n| table |\n+-------+\n0 rows\n'
+        '+------------+\n| table      |\n+------------+\n| attributes |\n| events     |\n+------------+\n2 tables\n')
+    assert render('SHOW TABLES', [])[0] == '+-------+\n| table |\n+-------+\n0 tables\n'

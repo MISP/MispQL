@@ -40,6 +40,7 @@ def session(monkeypatch, capsys):
     monkeypatch.setattr(repl.Completions, 'table_fields', lambda self, table: [])
 
     def session(keys, *argv):
+        monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
         with create_pipe_input() as keyboard:
             keyboard.send_text(keys)
             keyboard.close()  # EOF after the keys: a session that does not end on them cannot hang
@@ -155,10 +156,18 @@ class Discovery:
                            'objects': {'id': {}, 'object_name': {}}}[table], 'limits': {}}
 
 
-def offered(completions, text, cursor=None, tab=False):
+def offered(completions, text, cursor=None):
     document = Document(text, len(text) if cursor is None else cursor)
-    event = CompleteEvent(completion_requested=tab)
+    event = CompleteEvent(completion_requested=True)
     return [c.text for c in completions.get_completions(document, event)]
+
+
+def test_completion_on_tab_only(misp, session, monkeypatch):
+    options = {}
+    init = repl.PromptSession.__init__
+    monkeypatch.setattr(repl.PromptSession, '__init__', lambda self, **kw: options.update(kw) or init(self, **kw))
+    session('quit\r')
+    assert options['complete_while_typing'] is False
 
 
 def test_completion_offers_the_statement_tables_fields():
@@ -181,10 +190,19 @@ def test_completion_without_fields():
     assert offered(repl.Completions(None), 'SELECT * FROM events WHERE ev') == ['events']
 
 
-def test_completion_on_an_empty_word_only_when_asked():
-    completions = repl.Completions(None)
-    assert offered(completions, 'SELECT * FROM ') == []
-    assert offered(completions, 'SELECT * FROM ', tab=True)[-3:] == ['attributes', 'events', 'objects']
+def test_completion_on_an_empty_word():
+    assert offered(repl.Completions(None), 'SELECT * FROM ')[-3:] == ['attributes', 'events', 'objects']
+
+
+def test_no_completion_inside_a_string():
+    completions = repl.Completions(Discovery())
+    fields = ['events', 'eventinfo', 'event_timestamp']
+    assert offered(completions, "SELECT * FROM events WHERE eventinfo LIKE 'ev") == []
+    assert offered(completions, 'SELECT * FROM events WHERE eventinfo = "it\'s ev') == []
+    assert offered(completions, "SELECT * FROM events WHERE eventinfo = 'it''s ev") == []
+    assert offered(completions, "SELECT * FROM events WHERE eventinfo = 'evil' LIMIT 1", cursor=42) == []
+    assert offered(completions, "SELECT * FROM events WHERE eventinfo = 'evil' AND ev") == fields
+    assert offered(completions, 'SELECT * FROM events WHERE `ev') == fields
 
 
 def test_batch_never_loads_prompt_toolkit():

@@ -29,10 +29,12 @@ mispql < script.mql                   # or from stdin
 Every statement is checked before the first one is sent; the script stops at
 the first error. Results go to stdout, errors and warnings to stderr.
 
-At the interactive prompt, Enter runs the input once it ends with `;`
-(Alt-Enter runs it as it is); Tab completes keywords, tables and the fields of
-the table after `FROM`. `help` lists the syntax, Ctrl-C clears the input or
-stops a running query, `quit` or Ctrl-D leaves. History is kept in
+The interactive prompt needs a terminal on both stdin and stdout; with output
+redirected (`mispql > out.txt`), what you type is read as a script until
+Ctrl-D. At the prompt, Enter runs the input once it ends with `;` (Alt-Enter
+runs it as it is); Tab completes keywords, tables and the fields of the table
+after `FROM`, outside quoted values. `help` lists the syntax, Ctrl-C clears the
+input or stops a running query, `quit` or Ctrl-D leaves. History is kept in
 `~/.local/state/mispql/history` (`$XDG_STATE_HOME`), readable by you alone.
 
 | Option | |
