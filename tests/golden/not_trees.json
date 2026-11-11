@@ -32,10 +32,8 @@
             },
             {
               "NOT": {
-                "NOT": {
-                  "value": {
-                    "LIKE": "%x"
-                  }
+                "value": {
+                  "NOT LIKE": "%x"
                 }
               }
             }
@@ -61,6 +59,6 @@
     "query.AND[1].OR[0].<unknown>": "event_id",
     "query.AND[1].OR[1]": "NOT value NOT LIKE '%x'",
     "query.AND[1].OR[1].NOT": "value NOT LIKE '%x'",
-    "query.AND[1].OR[1].NOT.NOT.<unknown>": "value"
+    "query.AND[1].OR[1].NOT.<unknown>": "value"
   }
 }

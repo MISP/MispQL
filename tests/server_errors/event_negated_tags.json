@@ -1,16 +1,21 @@
 {
-  "statement": "SELECT * FROM events WHERE tags NOT LIKE 'tlp:%' LIMIT 1",
+  "statement": "SELECT * FROM events WHERE id = 1 OR tags NOT LIKE 'tlp:%' LIMIT 1",
   "body": {
     "returnFormat": "json",
     "ignore": 1,
     "limit": 1,
     "page": 1,
     "query": {
-      "NOT": {
-        "tags": {
-          "LIKE": "tlp:%"
+      "OR": [
+        {
+          "id": 1
+        },
+        {
+          "tags": {
+            "NOT LIKE": "tlp:%"
+          }
         }
-      }
+      ]
     }
   },
   "status": 400,
@@ -20,9 +25,9 @@
     "url": "/events/restSearch",
     "errors": [
       {
-        "path": "query.NOT.tags",
+        "path": "query.OR[1].tags",
         "code": "bad_shape",
-        "message": "NOT cannot hold attribute, object or tag fields when searching events; use != on tags"
+        "message": "negated tags are only allowed under AND when searching events"
       }
     ]
   }

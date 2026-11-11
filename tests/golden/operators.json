@@ -64,10 +64,8 @@
           }
         },
         {
-          "NOT": {
-            "comment": {
-              "LIKE": "test%"
-            }
+          "comment": {
+            "NOT LIKE": "test%"
           }
         },
         {
@@ -104,7 +102,7 @@
     "query.AND[9]": "value LIKE '%.example.com'",
     "query.AND[9].<unknown>": "value",
     "query.AND[10]": "comment NOT LIKE 'test%'",
-    "query.AND[10].NOT.<unknown>": "comment",
+    "query.AND[10].<unknown>": "comment",
     "query.AND[11]": "id > -1",
     "query.AND[11].<unknown>": "id"
   }

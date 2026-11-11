@@ -166,12 +166,7 @@ class _Select:
             value = [literal.value for literal in node.value]
         else:
             value = node.value.value
-        field_span = (node.field.start, node.field.end)
-        if node.op == 'NOT LIKE':
-            # The API has no NOT LIKE.
-            self.spans[f'{path}.NOT.<unknown>'] = field_span
-            return {'NOT': {name: {'LIKE': value}}}
-        self.spans[f'{path}.<unknown>'] = field_span
+        self.spans[f'{path}.<unknown>'] = (node.field.start, node.field.end)
         return {name: value if node.op == '=' else {node.op: value}}
 
     def field(self, field):

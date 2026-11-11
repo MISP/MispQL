@@ -18,7 +18,7 @@ STATEMENTS = {
         " AND value NOT LIKE 'a%b' AND id LIKE '1%' LIMIT 1"
     ),
     'event_negation': "SELECT * FROM events WHERE event_id > 0 AND (eventinfo = 'x' OR type != 'btc') LIMIT 1",
-    'event_negated_tags': "SELECT * FROM events WHERE tags NOT LIKE 'tlp:%' LIMIT 1",
+    'event_negated_tags': "SELECT * FROM events WHERE id = 1 OR tags NOT LIKE 'tlp:%' LIMIT 1",
     'object_not_over_attribute': "SELECT * FROM objects WHERE NOT value = 'x' OR object_name = 'url' LIMIT 1",
     'too_deep': (
         "SELECT * FROM events WHERE ((((id = 1 AND id = 2) OR id = 3) AND id = 4) OR id = 5)"

@@ -96,11 +96,11 @@ LOCATED = {
         'query.AND[0].<unknown>': 'nosuch',
         'query.AND[1].id': "id = 'x'",
         'query.AND[2].type': "type IN ('a', 5)",
-        'query.AND[3].NOT.value': "value NOT LIKE 'a%b'",
+        'query.AND[3].value': "value NOT LIKE 'a%b'",
         'query.AND[4].id': "id LIKE '1%'",
     },
     'event_negation': {'query.AND[1].OR[1].type': "type != 'btc'"},
-    'event_negated_tags': {'query.NOT.tags': "tags NOT LIKE 'tlp:%'"},
+    'event_negated_tags': {'query.OR[1].tags': "tags NOT LIKE 'tlp:%'"},
     'object_not_over_attribute': {'query.OR[0].NOT.value': "value = 'x'"},
     'too_deep': {
         'query.AND[0].OR[0].AND[0].OR[0].AND[0]': 'id = 1',

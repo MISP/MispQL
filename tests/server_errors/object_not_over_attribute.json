@@ -27,7 +27,7 @@
       {
         "path": "query.OR[0].NOT.value",
         "code": "bad_shape",
-        "message": "NOT cannot hold attribute or tag fields when searching objects; use != on tags"
+        "message": "NOT cannot hold attribute or tag fields when searching objects; use != or NOT LIKE on tags"
       }
     ]
   }

@@ -22,10 +22,8 @@
           }
         },
         {
-          "NOT": {
-            "value": {
-              "LIKE": "a%b"
-            }
+          "value": {
+            "NOT LIKE": "a%b"
           }
         },
         {
@@ -58,7 +56,7 @@
         "message": "this field expects a non-empty string"
       },
       {
-        "path": "query.AND[3].NOT.value",
+        "path": "query.AND[3].value",
         "code": "bad_type",
         "message": "LIKE takes a leading and/or trailing %, nothing else"
       },
