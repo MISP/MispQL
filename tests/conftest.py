@@ -7,7 +7,7 @@ import pytest
 
 
 class Stub:
-    """A MISP stand-in: answers each POST with the next queued reply and records the request."""
+    """A MISP stand-in: answers each request with the next queued reply and records it."""
 
     def __init__(self):
         self.replies = []
@@ -24,7 +24,14 @@ def stub():
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-            stub.requests.append({'path': self.path, 'headers': dict(self.headers), 'body': json.loads(body)})
+            self.answer(json.loads(body))
+
+        def do_GET(self):
+            self.answer(None)
+
+        def answer(self, body):
+            stub.requests.append({'method': self.command, 'path': self.path, 'headers': dict(self.headers),
+                                  'body': body})
             status, headers, payload, delay = stub.replies.pop(0)
             time.sleep(delay)
             data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()

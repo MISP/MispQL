@@ -110,12 +110,26 @@ def test_compile_error_needs_no_config(run):
     assert err.startswith('ERROR 1:1: add a WHERE or a LIMIT')
 
 
-@pytest.mark.parametrize('text, what', [('DESCRIBE events', 'DESCRIBE'), ('SHOW TABLES', 'SHOW TABLES')])
-def test_discovery_is_refused_for_now(misp, run, text, what):
-    code, _, err = run('-e', f'SELECT * FROM events LIMIT 1; {text}')
-    assert code == 1
-    assert err.startswith(f'ERROR 1:31: {what} is not available yet\n')
-    assert misp.requests == []
+def test_describe_and_show_tables(misp, run):
+    found = {'tables': {'objects': {'fields': {'id': {'type': 'int', 'operators': ['='], 'level': ['object']}}}},
+             'limits': {'max_depth': 5}}
+    misp.reply(found)
+    misp.reply(found)
+    misp.reply({'message': 'You do not have the permission to use complex queries.'}, status=403)
+    misp.reply(found)
+    code, out, err = run('-v', '-e', 'DESCRIBE objects; SHOW TABLES')
+    assert code == 0
+    assert out.endswith('1 field\nORDER BY: none\nlimits: max_depth 5\n'
+                        '+------------+\n| table      |\n+------------+\n| attributes |\n| objects    |\n'
+                        '+------------+\n2 rows\n')
+    assert err == ''.join(f'GET {misp.url}/{table}/queryDescribe\n'
+                          for table in ('objects', 'attributes', 'events', 'objects'))
+
+
+def test_describe_fails_like_any_statement(misp, run):
+    misp.reply({'message': 'You do not have the permission to use complex queries.'}, status=403)
+    assert run('-e', 'DESCRIBE events') == (
+        1, '', 'ERROR 1:1: HTTP 403: You do not have the permission to use complex queries.\n')
 
 
 def test_query_errors_stop_the_script(misp, run):
@@ -188,7 +202,8 @@ def test_verbose_prints_each_request_sent(misp, run):
 
 def test_dry_run_sends_nothing(run):
     code, out, err = run('--dry-run', '-e', 'SELECT * FROM attributes LIMIT 3 OFFSET 4;'
-                                            "SELECT COUNT(*) FROM events WHERE info LIKE 'x%'")
+                                            "SELECT COUNT(*) FROM events WHERE info LIKE 'x%';"
+                                            'DESCRIBE events; SHOW TABLES')
     assert (code, err) == (0, '')
     body = {'returnFormat': 'json', 'ignore': 1, 'limit': 3, 'page': 2}
     count = {'returnFormat': 'json', 'ignore': 1, 'limit': 1, 'page': 1, 'metadata': 1,
@@ -198,6 +213,8 @@ def test_dry_run_sends_nothing(run):
         f'POST /attributes/restSearch (sent only when the first page is full)\n'
         f'{json.dumps({**body, "page": 3}, indent=2)}\n'
         f'POST /events/restSearch\n{json.dumps(count, indent=2)}\n'
+        'GET /events/queryDescribe\n'
+        'GET /attributes/queryDescribe\nGET /events/queryDescribe\nGET /objects/queryDescribe\n'
     )
 
 

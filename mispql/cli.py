@@ -60,7 +60,7 @@ def _main(args):
         return USAGE
     try:
         statements = parse(text)
-        plans = [_compile(statement) for statement in statements]
+        plans = [compile_statement(statement) for statement in statements]
     except MispQLError as e:
         _stderr(e.render(text))
         return FAILED
@@ -117,14 +117,6 @@ def _decode(data, name):
         raise UsageError(f'{name}: not UTF-8 (byte {e.start})') from None
 
 
-def _compile(statement):
-    plan = compile_statement(statement)
-    if isinstance(plan, (DescribePlan, ShowTablesPlan)):
-        what = 'DESCRIBE' if isinstance(plan, DescribePlan) else 'SHOW TABLES'
-        raise MispQLError(f'{what} is not available yet', statement.start, statement.end)
-    return plan
-
-
 def _client(args):
     settings = config.load(args.config, args.profile, args.key_file)
     for warning in settings.warnings:
@@ -139,14 +131,22 @@ def _client(args):
 
 
 def _dry_run(plan):
-    print(_request('POST', plan.endpoint, plan.body))
+    if isinstance(plan, ShowTablesPlan):
+        for endpoint in plan.endpoints.values():
+            print(_request('GET', endpoint))
+    elif isinstance(plan, DescribePlan):
+        print(_request('GET', plan.endpoint))
+    else:
+        print(_request('POST', plan.endpoint, plan.body))
     if isinstance(plan, SearchPlan) and plan.skip:
         body = {**plan.body, 'page': plan.body['page'] + 1}
         print(_request('POST', plan.endpoint, body, ' (sent only when the first page is full)'))
     sys.stdout.flush()
 
 
-def _request(method, target, body, note=''):
+def _request(method, target, body=None, note=''):
+    if body is None:
+        return f'{method} {target}{note}'
     return f'{method} {target}{note}\n{json.dumps(body, indent=2, ensure_ascii=False)}'
 
 

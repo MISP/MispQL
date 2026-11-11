@@ -10,9 +10,12 @@ mispql -e "SELECT * FROM attributes WHERE type = 'ip-dst' AND id > 50000 LIMIT 1
 Every query goes through the API as the user whose key it uses, so it sees
 exactly what that user may see. Read-only.
 
-**Status**: early development; batch mode works, the interactive prompt,
-`DESCRIBE` and `SHOW TABLES` do not yet. Needs a MISP 3.0 server (the `query`
-key of restSearch).
+**Status**: early development; batch mode works, the interactive prompt does
+not yet. Needs a MISP 3.0 server (the `query` key of restSearch).
+
+`SHOW TABLES` lists the tables you may query, `DESCRIBE events` their fields,
+operators and the names `ORDER BY` takes. Both, and every `WHERE`, need the
+Complex query permission (or a site admin).
 
 ## Usage
 

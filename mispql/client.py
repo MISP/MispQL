@@ -2,7 +2,7 @@
 import requests
 
 from mispql import __version__
-from mispql.compiler import CountPlan
+from mispql.compiler import CountPlan, DescribePlan, ShowTablesPlan
 from mispql.errors import MispQLError
 
 CONNECT_TIMEOUT = 10
@@ -11,6 +11,10 @@ ROW_KEYS = {'attributes': 'Attribute', 'events': 'Event', 'objects': 'Object'}
 
 class ClientError(Exception):
     """MISP could not be reached, refused the request or answered in an unexpected shape."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status  # the HTTP status MISP answered with; None if it did not answer
 
 
 class QueryErrors(Exception):
@@ -44,7 +48,12 @@ class Client:
         self.session.verify = settings.verify_ssl
 
     def run(self, plan):
-        """A count, the rows of a search, or for MISP's own formats the unread response."""
+        """A count, the rows of a search, for MISP's own formats the unread response; for
+        DESCRIBE the table's fields and the limits, for SHOW TABLES the tables answering."""
+        if isinstance(plan, DescribePlan):
+            return self.describe(plan.table, plan.endpoint)
+        if isinstance(plan, ShowTablesPlan):
+            return self.tables(plan.endpoints)
         if isinstance(plan, CountPlan):
             response = self.post(plan.endpoint, plan.body)
             text = response.headers.get('X-Result-Count') if plan.source == 'header' else response.text
@@ -74,13 +83,40 @@ class Client:
         except (ValueError, KeyError, TypeError):
             raise ClientError(f'{plan.endpoint}: unexpected answer') from None
 
+    def describe(self, table, endpoint):
+        try:
+            found = self.send('GET', endpoint).json()
+            entry = found['tables'][table]
+            return {'fields': dict(entry['fields']), 'limits': dict(found['limits'])}
+        except (ValueError, KeyError, TypeError):
+            raise ClientError(f'{endpoint}: unexpected answer') from None
+
+    def tables(self, endpoints):
+        """The tables whose discovery endpoint answers; MISP's first error if none does."""
+        found, first_error = [], None
+        for table, endpoint in endpoints.items():
+            try:
+                self.send('GET', endpoint)
+            except ClientError as e:
+                if e.status is None:
+                    raise
+                first_error = first_error or e
+                continue
+            found.append(table)
+        if not found and first_error:
+            raise first_error
+        return found
+
     def post(self, endpoint, body, stream=False):
+        return self.send('POST', endpoint, body, stream)
+
+    def send(self, method, endpoint, body=None, stream=False):
         url = self.settings.url.rstrip('/') + endpoint
         if self.trace:
-            self.trace('POST', url, body)
+            self.trace(method, url, body)
         try:
-            response = self.session.post(url, json=body, stream=stream,
-                                         timeout=(CONNECT_TIMEOUT, self.settings.timeout))
+            response = self.session.request(method, url, json=body, stream=stream,
+                                            timeout=(CONNECT_TIMEOUT, self.settings.timeout))
         except requests.exceptions.SSLError as e:
             raise ClientError(f'TLS failed for {url}: {e}') from None
         except requests.exceptions.ConnectTimeout:
@@ -109,9 +145,10 @@ def _failure(response):
         reply = response.json()
     except ValueError:
         reply = None
+    status = response.status_code
     if not isinstance(reply, dict):
-        return ClientError(f'HTTP {response.status_code}')
-    if response.status_code == 400 and isinstance(reply.get('errors'), list) and reply['errors']:
+        return ClientError(f'HTTP {status}', status)
+    if status == 400 and isinstance(reply.get('errors'), list) and reply['errors']:
         return QueryErrors(reply['errors'])
     message = reply.get('message') or reply.get('name')
-    return ClientError(f'HTTP {response.status_code}: {message}' if message else f'HTTP {response.status_code}')
+    return ClientError(f'HTTP {status}: {message}' if message else f'HTTP {status}', status)

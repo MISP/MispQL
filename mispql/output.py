@@ -4,7 +4,7 @@ import io
 import json
 
 from mispql.client import chunks
-from mispql.compiler import CountPlan
+from mispql.compiler import SORTABLE, CountPlan, DescribePlan, ShowTablesPlan
 
 TABLE_COLUMNS = {
     'attributes': ['id', 'event_id', 'category', 'type', 'value', 'to_ids', 'timestamp', 'Tag'],
@@ -20,13 +20,19 @@ def write(plan, result, out):
     if isinstance(plan, CountPlan):
         out.write(f'{result}\n'.encode())
         return []
-    if plan.output == 'verbatim':
+    if isinstance(plan, DescribePlan):
+        renderer = _describe
+    elif isinstance(plan, ShowTablesPlan):
+        renderer = _show_tables
+    elif plan.output == 'verbatim':
         for chunk in chunks(result):
             out.write(chunk)
         return []
+    else:
+        renderer = _RENDERERS[plan.output]
     text = io.TextIOWrapper(out, encoding='utf-8', newline='', write_through=True)
     try:
-        return _RENDERERS[plan.output](plan, result, text)
+        return renderer(plan, result, text)
     finally:
         text.detach()
 
@@ -118,7 +124,27 @@ def _table(plan, rows, out):
     columns, warnings = _columns(flat_rows, plan.columns or TABLE_COLUMNS[plan.table])
     if plan.columns is None:
         warnings = []
-    lines = [[_cut(_text(cell)) for cell in _cells(row, columns)] for row in flat_rows]
+    _box(columns, [[_text(cell) for cell in _cells(row, columns)] for row in flat_rows], out)
+    return warnings
+
+
+def _describe(plan, found, out):
+    fields = found['fields']
+    _box(['field', 'type', 'operators', 'level'],
+         [[name, _text(info.get('type')), ' '.join(info.get('operators', [])), _text(info.get('level'))]
+          for name, info in fields.items()], out, 'field')
+    out.write(f'ORDER BY: {", ".join(SORTABLE[plan.table]) or "none"}\n')
+    out.write(f'limits: {", ".join(f"{name} {value}" for name, value in found["limits"].items())}\n')
+    return []
+
+
+def _show_tables(plan, tables, out):
+    _box(['table'], [[table] for table in tables], out)
+    return []
+
+
+def _box(columns, rows, out, noun='row'):
+    lines = [[_cut(cell) for cell in row] for row in rows]
     widths = [max([len(column)] + [len(line[i]) for line in lines]) for i, column in enumerate(columns)]
     rule = '+' + '+'.join('-' * (width + 2) for width in widths) + '+\n'
     out.write(rule)
@@ -128,8 +154,7 @@ def _table(plan, rows, out):
         out.write(_table_line(line, widths))
     if lines:
         out.write(rule)
-    out.write(f'{len(lines)} row{"" if len(lines) == 1 else "s"}\n')
-    return warnings
+    out.write(f'{len(lines)} {noun}{"" if len(lines) == 1 else "s"}\n')
 
 
 def _cut(text):

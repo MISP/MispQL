@@ -127,7 +127,60 @@ def test_http_errors(stub, status, payload, message):
     stub.reply(payload, status=status)
     with pytest.raises(ClientError) as exc:
         client(stub.url).run(plan_of('SELECT * FROM events LIMIT 1'))
-    assert str(exc.value) == message
+    assert (str(exc.value), exc.value.status) == (message, status)
+
+
+DISCOVERY = {
+    'tables': {'events': {
+        'endpoint': '/events/restSearch',
+        'fields': {'id': {'type': 'int', 'operators': ['='], 'level': ['event']}},
+        'sortable': ['id', 'info'],
+    }},
+    'limits': {'max_depth': 5},
+}
+FORBIDDEN = {'name': 'Forbidden', 'message': 'You do not have the permission to use complex queries.'}
+
+
+def test_describe(stub):
+    stub.reply(DISCOVERY)
+    assert client(stub.url).run(plan_of('DESCRIBE events')) == {
+        'fields': DISCOVERY['tables']['events']['fields'], 'limits': {'max_depth': 5}}
+    [request] = stub.requests
+    assert (request['method'], request['path'], request['body']) == ('GET', '/events/queryDescribe', None)
+    stub.reply({'tables': {'attributes': DISCOVERY['tables']['events']}, 'limits': {}})
+    with pytest.raises(ClientError, match='/events/queryDescribe: unexpected answer'):
+        client(stub.url).run(plan_of('DESCRIBE events'))
+
+
+def test_show_tables_leaves_out_a_table_that_refuses(stub):
+    stub.reply(DISCOVERY)
+    stub.reply(FORBIDDEN, status=403)
+    stub.reply(DISCOVERY)
+    assert client(stub.url).run(plan_of('SHOW TABLES')) == ['attributes', 'objects']
+    assert [(r['method'], r['path']) for r in stub.requests] == [
+        ('GET', f'/{table}/queryDescribe') for table in ('attributes', 'events', 'objects')]
+
+
+def test_show_tables_fails_with_the_first_error_when_none_answers(stub):
+    stub.reply(FORBIDDEN, status=403)
+    stub.reply({'message': 'boom'}, status=500)
+    stub.reply({'message': 'Not found'}, status=404)
+    with pytest.raises(ClientError) as exc:
+        client(stub.url).run(plan_of('SHOW TABLES'))
+    assert str(exc.value) == f'HTTP 403: {FORBIDDEN["message"]}'
+    assert len(stub.requests) == 3
+
+
+def test_show_tables_stops_on_a_transport_error():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        port = s.getsockname()[1]
+    traced = []
+    c = Client(Settings(url=f'http://127.0.0.1:{port}', key='k'), trace=lambda *request: traced.append(request))
+    with pytest.raises(ClientError) as exc:
+        c.run(plan_of('SHOW TABLES'))
+    assert (str(exc.value), exc.value.status) == (f'cannot reach http://127.0.0.1:{port}/attributes/queryDescribe', None)
+    assert traced == [('GET', f'http://127.0.0.1:{port}/attributes/queryDescribe', None)]
 
 
 def test_unexpected_answer(stub):

@@ -160,3 +160,34 @@ def test_verbatim_broken_answer():
 
 def test_count():
     assert render("SELECT COUNT(*) FROM attributes WHERE type = 'md5'", 73890) == ('73890\n', [])
+
+
+def test_describe():
+    found = {
+        'fields': {
+            'id': {'type': 'int', 'operators': ['=', '!=', '>', 'IN'], 'level': ['event']},
+            'tags': {'type': 'string', 'operators': ['=', 'LIKE'], 'level': ['attribute', 'event']},
+        },
+        'limits': {'max_depth': 5, 'max_list': 100},
+    }
+    text, warnings = render('DESCRIBE events', found)
+    assert warnings == []
+    assert text == (
+        '+-------+--------+-----------+-----------------+\n'
+        '| field | type   | operators | level           |\n'
+        '+-------+--------+-----------+-----------------+\n'
+        '| id    | int    | = != > IN | event           |\n'
+        '| tags  | string | = LIKE    | attribute,event |\n'
+        '+-------+--------+-----------+-----------------+\n'
+        '2 fields\n'
+        'ORDER BY: id, event_id, eventinfo, analysis, threat_level_id, distribution, timestamp, '
+        'event_timestamp, publish_timestamp\n'
+        'limits: max_depth 5, max_list 100\n'
+    )
+    assert render('DESCRIBE objects', found)[0].splitlines()[-2] == 'ORDER BY: none'
+
+
+def test_show_tables():
+    assert render('SHOW TABLES', ['attributes', 'events'])[0] == (
+        '+------------+\n| table      |\n+------------+\n| attributes |\n| events     |\n+------------+\n2 rows\n')
+    assert render('SHOW TABLES', [])[0] == '+-------+\n| table |\n+-------+\n0 rows\n'
