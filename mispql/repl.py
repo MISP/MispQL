@@ -104,7 +104,8 @@ class Completions(Completer):
             if table not in self.fields:
                 try:
                     found = self.client.describe(table, TABLES[table].discovery)
-                    self.fields[table] = list(found['fields'])
+                    # meta.<key> stands for any key: offer meta.
+                    self.fields[table] = [name.removesuffix('<key>') for name in found['fields']]
                 except ClientError:
                     self.fields[table] = []
             return self.fields[table]

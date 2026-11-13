@@ -92,7 +92,7 @@ class _Select:
         verbatim = word if output == 'verbatim' else None
         columns = None
         if isinstance(stmt.columns, list):
-            columns = [self.column(column) for column in stmt.columns]
+            columns = [self.field(column) for column in stmt.columns]
         query = None if stmt.where is None else self.node(stmt.where, 'query')
         order = self.order()
         limit, page, skip = self.paging(verbatim)
@@ -148,15 +148,13 @@ class _Select:
         return {name: value if node.op == '=' else {node.op: value}}
 
     def field(self, field):
-        if field.table is not None and field.table != self.table.name:
+        if field.table is None or field.table == self.table.name:
+            return field.name
+        if field.table in TABLES:
             raise MispQLError(f'{field.table} is not the table queried here ({self.table.name})',
                               field.start, field.end)
-        return field.name
-
-    def column(self, field):
-        if field.table in TABLES:
-            return self.field(field)
-        return field.name if field.table is None else f'{field.table}.{field.name}'
+        # Not a table, so part of the name: meta.synonyms, or Event.Orgc.name as a column.
+        return f'{field.table}.{field.name}'
 
     def order(self):
         table = self.table

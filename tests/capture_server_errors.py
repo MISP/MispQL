@@ -24,6 +24,9 @@ STATEMENTS = {
         "SELECT * FROM galaxy_clusters WHERE org LIKE 'MISP%' AND nosuch = 1 AND default = 'yes'"
         " ORDER BY value LIMIT 1"
     ),
+    'galaxy_cluster_meta': (
+        "SELECT * FROM galaxy_clusters WHERE meta.synonyms > 'x' OR meta.`Additional Content Note` = 1 LIMIT 1"
+    ),
     'too_deep': (
         "SELECT * FROM events WHERE ((((id = 1 AND id = 2) OR id = 3) AND id = 4) OR id = 5)"
         " AND id = 6 LIMIT 1"

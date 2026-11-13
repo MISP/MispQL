@@ -46,12 +46,10 @@ def test_golden(case):
     ('SELECT * FROM galaxy_clusters ORDER BY description LIMIT 1', 'description',
      'cannot sort galaxy_clusters by description; use id, version, type, value, distribution, orgc_id, '
      'org_id, tag_name, galaxy_id'),
-    ("SELECT * FROM galaxy_clusters WHERE Galaxy.name = 'x'", 'Galaxy.name',
-     'galaxy is not the table queried here (galaxy_clusters)'),
+    ("SELECT * FROM galaxy_clusters WHERE events.id = 1", 'events.id',
+     'events is not the table queried here (galaxy_clusters)'),
     ('SELECT * FROM attributes WHERE events.id = 1', 'events.id',
      'events is not the table queried here (attributes)'),
-    ("SELECT * FROM events WHERE id = 1 AND Event.info = 'x'", 'Event.info',
-     'event is not the table queried here (events)'),
     ('SELECT events.info FROM attributes LIMIT 1', 'events.info',
      'events is not the table queried here (attributes)'),
     ('SELECT * FROM attributes WHERE events.id = 1 ORDER BY bogus', 'events.id',
@@ -66,7 +64,8 @@ def test_golden(case):
      'cannot sort events by info; use id, event_id, eventinfo, analysis, threat_level_id, '
      'distribution, timestamp, event_timestamp, publish_timestamp'),
     ('SELECT * FROM attributes ORDER BY Event.publish_timestamp LIMIT 1', 'Event.publish_timestamp',
-     'event is not the table queried here (attributes)'),
+     'cannot sort attributes by event.publish_timestamp; use id, event_id, object_id, type, category, value, '
+     'distribution, timestamp, object_relation, publish_timestamp'),
     ('SELECT * FROM attributes ORDER BY attributes.id, events.id LIMIT 1', 'events.id',
      'events is not the table queried here (attributes)'),
     ('SELECT * FROM objects ORDER BY id DESC LIMIT 1', 'id DESC', 'objects cannot be sorted'),
@@ -109,6 +108,10 @@ LOCATED = {
     'event_negation': {'query.AND[1].OR[1].type': "type != 'btc'"},
     'event_negated_tags': {'query.OR[1].tags': "tags NOT LIKE 'tlp:%'"},
     'object_not_over_attribute': {'query.OR[0].NOT.value': "value = 'x'"},
+    'galaxy_cluster_meta': {
+        'query.OR[0].meta.<key>': "meta.synonyms > 'x'",
+        'query.OR[1].meta.<key>': 'meta.`Additional Content Note` = 1',
+    },
     'galaxy_cluster_leaves': {
         'query.AND[0].org': "org LIKE 'MISP%'",
         'query.AND[1].<unknown>': 'nosuch',

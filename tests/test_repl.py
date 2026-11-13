@@ -154,7 +154,7 @@ class Discovery:
             raise ClientError('HTTP 403: no', 403)
         return {'fields': {'events': {'id': {}, 'eventinfo': {}, 'event_timestamp': {}},
                            'objects': {'id': {}, 'object_name': {}},
-                           'galaxy_clusters': {'id': {}, 'galaxy_name': {}, 'galaxy_namespace': {}}}[table],
+                           'galaxy_clusters': {'id': {}, 'galaxy_name': {}, 'galaxy_namespace': {}, 'meta.<key>': {}}}[table],
                 'limits': {}}
 
 
@@ -180,6 +180,7 @@ def test_completion_offers_the_statement_tables_fields():
     assert offered(completions, 'SELECT ob FROM objects', cursor=9) == ['objects', 'object_name']
     assert offered(completions, 'SELECT * FROM objects LIMIT 1; SELECT * FROM events WHERE eventi') == ['eventinfo']
     assert offered(completions, 'SELECT * FROM galaxy_clusters WHERE galaxy_n') == ['galaxy_name', 'galaxy_namespace']
+    assert offered(completions, 'SELECT * FROM galaxy_clusters WHERE me') == ['meta.']
     assert discovery.calls == ['/events/queryDescribe', '/objects/queryDescribe', '/galaxy_clusters/queryDescribe']
 
 
