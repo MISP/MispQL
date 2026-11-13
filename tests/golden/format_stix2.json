@@ -4,7 +4,6 @@
   "endpoint": "/objects/restSearch",
   "body": {
     "returnFormat": "stix2",
-    "ignore": 1,
     "query": {
       "AND": [
         {

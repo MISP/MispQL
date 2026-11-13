@@ -1,0 +1,29 @@
+{
+  "plan": "CountPlan",
+  "table": "galaxy_clusters",
+  "endpoint": "/galaxy_clusters/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "AND": [
+        {
+          "galaxy_name": "Threat Actor"
+        },
+        {
+          "NOT": {
+            "deleted": true
+          }
+        }
+      ]
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "galaxy_name = 'Threat Actor' AND NOT deleted = TRUE",
+    "query.AND[0]": "galaxy_name = 'Threat Actor'",
+    "query.AND[0].<unknown>": "galaxy_name",
+    "query.AND[1]": "NOT deleted = TRUE",
+    "query.AND[1].NOT": "deleted = TRUE",
+    "query.AND[1].NOT.<unknown>": "deleted"
+  }
+}

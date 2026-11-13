@@ -131,6 +131,37 @@ def test_table_default_columns_do_not_warn():
     assert header.split('|')[-2].strip() == 'Tag' and row.split('|')[-2].strip() == ''
 
 
+GALAXY_CLUSTERS = [{
+    'id': '2', 'type': 'threat-actor', 'value': 'Comment Crew', 'authors': ['Alexandre Dulaunoy', 'Florian Roth'],
+    'distribution': '3', 'default': True, 'published': False,
+    'Galaxy': {'id': '2', 'name': 'Threat Actor', 'type': 'threat-actor'},
+    'GalaxyElement': [{'key': 'synonyms', 'value': 'APT 1'}, {'key': 'country', 'value': 'CN'}],
+    'GalaxyClusterRelation': [],
+    'Org': {'id': '0', 'name': 'MISP'}, 'Orgc': {'id': '0', 'name': 'MISP'},
+}]
+
+
+def test_galaxy_cluster_default_columns():
+    text, warnings = render("SELECT * FROM galaxy_clusters WHERE value = 'Comment Crew' FORMAT table",
+                            GALAXY_CLUSTERS)
+    assert warnings == []
+    assert text == (
+        '+----+--------------+--------------+-----------+--------------+---------+\n'
+        '| id | value        | Galaxy.name  | Orgc.name | distribution | default |\n'
+        '+----+--------------+--------------+-----------+--------------+---------+\n'
+        '| 2  | Comment Crew | Threat Actor | MISP      | 3            | true    |\n'
+        '+----+--------------+--------------+-----------+--------------+---------+\n'
+        '1 row\n'
+    )
+
+
+def test_galaxy_cluster_flat_keeps_authors_and_leaves_out_elements():
+    text, _ = render("SELECT * FROM galaxy_clusters WHERE id = 2 FORMAT flat", GALAXY_CLUSTERS)
+    header, row = text.splitlines()
+    assert 'authors' in header.split(',') and 'Alexandre Dulaunoy,Florian Roth' in row
+    assert 'GalaxyElement' not in header and 'APT 1' not in row
+
+
 class FakeResponse:
     url = 'http://misp/attributes/restSearch'
 
@@ -185,6 +216,8 @@ def test_describe():
         'limits: max_depth 5, max_list 100\n'
     )
     assert render('DESCRIBE objects', found)[0].splitlines()[-2] == 'ORDER BY: none'
+    assert render('DESCRIBE galaxy_clusters', found)[0].splitlines()[-2] == (
+        'ORDER BY: id, version, type, value, distribution, orgc_id, org_id, tag_name, galaxy_id')
 
 
 def test_show_tables():

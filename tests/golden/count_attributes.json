@@ -4,7 +4,6 @@
   "endpoint": "/attributes/restSearch",
   "body": {
     "returnFormat": "count",
-    "ignore": 1,
     "query": {
       "type": {
         "IN": [

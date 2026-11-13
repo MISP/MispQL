@@ -2,7 +2,6 @@
   "statement": "SELECT * FROM objects WHERE NOT value = 'x' OR object_name = 'url' LIMIT 1",
   "body": {
     "returnFormat": "json",
-    "ignore": 1,
     "limit": 1,
     "page": 1,
     "query": {

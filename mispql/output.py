@@ -4,14 +4,9 @@ import io
 import json
 
 from mispql.client import chunks
-from mispql.compiler import SORTABLE, CountPlan, DescribePlan, ShowTablesPlan
+from mispql.compiler import CountPlan, DescribePlan, ShowTablesPlan
+from mispql.tables import TABLES
 
-TABLE_COLUMNS = {
-    'attributes': ['id', 'event_id', 'category', 'type', 'value', 'to_ids', 'timestamp', 'Tag'],
-    'events': ['id', 'date', 'info', 'Orgc.name', 'threat_level_id', 'analysis', 'published',
-               'attribute_count', 'Tag'],
-    'objects': ['id', 'event_id', 'name', 'meta-category', 'comment', 'timestamp'],
-}
 CELL_WIDTH = 60
 
 
@@ -121,7 +116,7 @@ def _flat(plan, rows, out):
 
 def _table(plan, rows, out):
     flat_rows = [flatten(row) for row in rows]
-    columns, warnings = _columns(flat_rows, plan.columns or TABLE_COLUMNS[plan.table])
+    columns, warnings = _columns(flat_rows, plan.columns or TABLES[plan.table].columns)
     if plan.columns is None:
         warnings = []
     _box(columns, [[_text(cell) for cell in _cells(row, columns)] for row in flat_rows], out)
@@ -133,7 +128,7 @@ def _describe(plan, found, out):
     _box(['field', 'type', 'operators', 'level'],
          [[name, _text(info.get('type')), ' '.join(info.get('operators', [])), _text(info.get('level'))]
           for name, info in fields.items()], out, 'field')
-    out.write(f'ORDER BY: {", ".join(SORTABLE[plan.table]) or "none"}\n')
+    out.write(f'ORDER BY: {", ".join(TABLES[plan.table].sortable) or "none"}\n')
     out.write(f'limits: {", ".join(f"{name} {value}" for name, value in found["limits"].items())}\n')
     return []
 

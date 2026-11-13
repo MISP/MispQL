@@ -2,7 +2,6 @@
   "statement": "SELECT * FROM events WHERE event_id > 0 AND (eventinfo = 'x' OR type != 'btc') LIMIT 1",
   "body": {
     "returnFormat": "json",
-    "ignore": 1,
     "limit": 1,
     "page": 1,
     "query": {

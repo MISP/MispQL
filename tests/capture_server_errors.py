@@ -20,6 +20,10 @@ STATEMENTS = {
     'event_negation': "SELECT * FROM events WHERE event_id > 0 AND (eventinfo = 'x' OR type != 'btc') LIMIT 1",
     'event_negated_tags': "SELECT * FROM events WHERE id = 1 OR tags NOT LIKE 'tlp:%' LIMIT 1",
     'object_not_over_attribute': "SELECT * FROM objects WHERE NOT value = 'x' OR object_name = 'url' LIMIT 1",
+    'galaxy_cluster_leaves': (
+        "SELECT * FROM galaxy_clusters WHERE org LIKE 'MISP%' AND nosuch = 1 AND default = 'yes'"
+        " ORDER BY value LIMIT 1"
+    ),
     'too_deep': (
         "SELECT * FROM events WHERE ((((id = 1 AND id = 2) OR id = 3) AND id = 4) OR id = 5)"
         " AND id = 6 LIMIT 1"

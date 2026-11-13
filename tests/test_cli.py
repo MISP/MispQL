@@ -110,13 +110,14 @@ def test_describe_and_show_tables(misp, run):
     misp.reply(found)
     misp.reply({'message': 'You do not have the permission to use complex queries.'}, status=403)
     misp.reply(found)
+    misp.reply({'message': 'Not found'}, status=404)
     code, out, err = run('-v', '-e', 'DESCRIBE objects; SHOW TABLES')
     assert code == 0
     assert out.endswith('1 field\nORDER BY: none\nlimits: max_depth 5\n'
                         '+------------+\n| table      |\n+------------+\n| attributes |\n| objects    |\n'
                         '+------------+\n2 tables\n')
     assert err == ''.join(f'GET {misp.url}/{table}/queryDescribe\n'
-                          for table in ('objects', 'attributes', 'events', 'objects'))
+                          for table in ('objects', 'attributes', 'events', 'objects', 'galaxy_clusters'))
 
 
 def test_describe_fails_like_any_statement(misp, run):
@@ -198,8 +199,8 @@ def test_dry_run_sends_nothing(run):
                                             "SELECT COUNT(*) FROM events WHERE info LIKE 'x%';"
                                             'DESCRIBE events; SHOW TABLES')
     assert (code, err) == (0, '')
-    body = {'returnFormat': 'json', 'ignore': 1, 'limit': 3, 'page': 2}
-    count = {'returnFormat': 'json', 'ignore': 1, 'limit': 1, 'page': 1, 'metadata': 1,
+    body = {'returnFormat': 'json', 'limit': 3, 'page': 2}
+    count = {'returnFormat': 'json', 'limit': 1, 'page': 1, 'metadata': 1,
              'query': {'info': {'LIKE': 'x%'}}}
     assert out == (
         f'POST /attributes/restSearch\n{json.dumps(body, indent=2)}\n'
@@ -208,6 +209,7 @@ def test_dry_run_sends_nothing(run):
         f'POST /events/restSearch\n{json.dumps(count, indent=2)}\n'
         'GET /events/queryDescribe\n'
         'GET /attributes/queryDescribe\nGET /events/queryDescribe\nGET /objects/queryDescribe\n'
+        'GET /galaxy_clusters/queryDescribe\n'
     )
 
 

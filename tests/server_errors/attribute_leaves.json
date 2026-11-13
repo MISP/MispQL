@@ -2,7 +2,6 @@
   "statement": "SELECT * FROM attributes WHERE nosuch = 1 AND id = 'x' AND type IN ('a', 5) AND value NOT LIKE 'a%b' AND id LIKE '1%' LIMIT 1",
   "body": {
     "returnFormat": "json",
-    "ignore": 1,
     "limit": 1,
     "page": 1,
     "query": {

@@ -3,7 +3,8 @@
   "endpoints": {
     "attributes": "/attributes/queryDescribe",
     "events": "/events/queryDescribe",
-    "objects": "/objects/queryDescribe"
+    "objects": "/objects/queryDescribe",
+    "galaxy_clusters": "/galaxy_clusters/queryDescribe"
   },
   "spans": {}
 }

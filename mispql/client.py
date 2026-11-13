@@ -4,9 +4,9 @@ import requests
 from mispql import __version__
 from mispql.compiler import CountPlan, DescribePlan, ShowTablesPlan
 from mispql.errors import MispQLError
+from mispql.tables import TABLES
 
 CONNECT_TIMEOUT = 10
-ROW_KEYS = {'attributes': 'Attribute', 'events': 'Event', 'objects': 'Object'}
 
 
 class ClientError(Exception):
@@ -73,7 +73,7 @@ class Client:
 
     def rows(self, plan, body):
         response = self.post(plan.endpoint, body)
-        key = ROW_KEYS[plan.table]
+        key = TABLES[plan.table].row_key
         try:
             found = response.json()['response']
             # {"response": {"Attribute": [...]}}, {"response": [{"Event": {...}}, ...]}

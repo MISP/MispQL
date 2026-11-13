@@ -11,15 +11,16 @@ from prompt_toolkit.history import FileHistory, InMemoryHistory
 
 from mispql import __version__, cli, config
 from mispql.client import Client, ClientError
-from mispql.compiler import TABLES
 from mispql.errors import MispQLError
 from mispql.lexer import KEYWORDS, tokenize
+from mispql.tables import TABLES
 
 COMMANDS = ('quit', 'exit', 'help')
-HELP = """\
-SELECT * | COUNT(*) | field, ... FROM attributes | events | objects
+HELP = f"""\
+SELECT * | COUNT(*) | field, ... FROM table
   [WHERE condition] [ORDER BY field [ASC|DESC], ...] [LIMIT n [OFFSET n]] [FORMAT word];
 DESCRIBE table;  SHOW TABLES;
+tables: {', '.join(TABLES)}
 condition: field = != < > <= >= value | field [NOT] IN (value, ...) | field [NOT] LIKE 'a%',
   combined with AND, OR, NOT and parentheses; values are 'text', 123, TRUE or FALSE
 FORMAT table and flat are rendered here; any other word is MISP's format, printed as sent.
@@ -102,7 +103,7 @@ class Completions(Completer):
         with self.lock:
             if table not in self.fields:
                 try:
-                    found = self.client.describe(table, f'/{table}/queryDescribe')
+                    found = self.client.describe(table, TABLES[table].discovery)
                     self.fields[table] = list(found['fields'])
                 except ClientError:
                     self.fields[table] = []

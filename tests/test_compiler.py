@@ -39,8 +39,15 @@ def test_golden(case):
 
 
 @pytest.mark.parametrize('text, fragment, message', [
-    ('SELECT * FROM tags LIMIT 1', 'tags', 'unknown table tags: use attributes, events or objects'),
-    ('DESCRIBE `Attributes`', '`Attributes`', 'unknown table Attributes: use attributes, events or objects'),
+    ('SELECT * FROM tags LIMIT 1', 'tags',
+     'unknown table tags: use attributes, events, objects or galaxy_clusters'),
+    ('DESCRIBE `Attributes`', '`Attributes`',
+     'unknown table Attributes: use attributes, events, objects or galaxy_clusters'),
+    ('SELECT * FROM galaxy_clusters ORDER BY description LIMIT 1', 'description',
+     'cannot sort galaxy_clusters by description; use id, version, type, value, distribution, orgc_id, '
+     'org_id, tag_name, galaxy_id'),
+    ("SELECT * FROM galaxy_clusters WHERE Galaxy.name = 'x'", 'Galaxy.name',
+     'galaxy is not the table queried here (galaxy_clusters)'),
     ('SELECT * FROM attributes WHERE events.id = 1', 'events.id',
      'events is not the table queried here (attributes)'),
     ("SELECT * FROM events WHERE id = 1 AND Event.info = 'x'", 'Event.info',
@@ -102,6 +109,11 @@ LOCATED = {
     'event_negation': {'query.AND[1].OR[1].type': "type != 'btc'"},
     'event_negated_tags': {'query.OR[1].tags': "tags NOT LIKE 'tlp:%'"},
     'object_not_over_attribute': {'query.OR[0].NOT.value': "value = 'x'"},
+    'galaxy_cluster_leaves': {
+        'query.AND[0].org': "org LIKE 'MISP%'",
+        'query.AND[1].<unknown>': 'nosuch',
+        'query.AND[2].default': "default = 'yes'",
+    },
     'too_deep': {
         'query.AND[0].OR[0].AND[0].OR[0].AND[0]': 'id = 1',
         'query.AND[0].OR[0].AND[0].OR[0].AND[1]': 'id = 2',

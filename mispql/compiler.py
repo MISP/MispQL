@@ -4,27 +4,7 @@ from dataclasses import dataclass, field
 
 from mispql import nodes
 from mispql.errors import MispQLError
-
-TABLES = ('attributes', 'events', 'objects')
-
-# Per table: field name in a statement -> the server's sort name. Without a `query`, the
-# server drops an unknown sort name silently, so the tool checks them itself.
-SORTABLE = {
-    'attributes': {
-        **{name: name for name in (
-            'id', 'event_id', 'object_id', 'type', 'category', 'value', 'distribution',
-            'timestamp', 'object_relation',
-        )},
-        'publish_timestamp': 'Event.publish_timestamp',
-    },
-    'events': {
-        'id': 'id', 'event_id': 'id', 'eventinfo': 'info', 'analysis': 'analysis',
-        'threat_level_id': 'threat_level_id', 'distribution': 'distribution',
-        'timestamp': 'timestamp', 'event_timestamp': 'timestamp',
-        'publish_timestamp': 'publish_timestamp',
-    },
-    'objects': {},
-}
+from mispql.tables import TABLES, names
 
 # Rendered by the tool from the JSON reply. Any other FORMAT word is MISP's returnFormat.
 RENDERINGS = ('table', 'flat')
@@ -76,18 +56,17 @@ class ShowTablesPlan(Plan):
 
 def compile_statement(statement):
     if isinstance(statement, nodes.ShowTables):
-        return ShowTablesPlan(endpoints={table: f'/{table}/queryDescribe' for table in TABLES})
+        return ShowTablesPlan(endpoints={name: table.discovery for name, table in TABLES.items()})
     if isinstance(statement, nodes.Describe):
         table = _table(statement.table)
-        return DescribePlan(table=table, endpoint=f'/{table}/queryDescribe')
+        return DescribePlan(table=table.name, endpoint=table.discovery)
     return _Select(statement).plan()
 
 
 def _table(name):
     if name.value not in TABLES:
-        raise MispQLError(f'unknown table {name.value}: use attributes, events or objects',
-                          name.start, name.end)
-    return name.value
+        raise MispQLError(f'unknown table {name.value}: use {names()}', name.start, name.end)
+    return TABLES[name.value]
 
 
 def _parent(path):
@@ -121,20 +100,21 @@ class _Select:
             raise MispQLError(
                 f'a column list needs FORMAT table, FORMAT flat or no FORMAT: '
                 f'FORMAT {verbatim} is printed as MISP sends it', stmt.format.start, stmt.format.end)
-        body = {'returnFormat': verbatim or 'json', 'ignore': 1}
+        body = {'returnFormat': verbatim or 'json'}
         if limit:
             body.update(limit=limit, page=page)
         if order:
             body['order'] = order
         if query is not None:
             body['query'] = query
-        return SearchPlan(table=self.table, endpoint=f'/{self.table}/restSearch', body=body,
+        return SearchPlan(table=self.table.name, endpoint=self.table.search, body=body,
                           output=output, columns=columns, skip=skip, spans=self.spans)
 
     def count(self):
         stmt = self.stmt
-        if self.table == 'objects':
-            raise MispQLError('COUNT(*) is not available on objects', stmt.table.start, stmt.table.end)
+        if self.table.count is None:
+            raise MispQLError(f'COUNT(*) is not available on {self.table.name}',
+                              stmt.table.start, stmt.table.end)
         if stmt.where is None:
             raise MispQLError('COUNT(*) needs a WHERE', stmt.columns.start, stmt.columns.end)
         query = self.node(stmt.where, 'query')
@@ -143,16 +123,14 @@ class _Select:
         for clause, node in clauses:
             if node is not None:
                 raise MispQLError(f'COUNT(*) takes no {clause}', node.start, node.end)
-        if self.table == 'events':
+        if self.table.count == 'header':
             # metadata: no event, however large, is fetched whole just to read the header.
-            body = {'returnFormat': 'json', 'ignore': 1, 'limit': 1, 'page': 1, 'metadata': 1}
-            source = 'header'
+            body = {'returnFormat': 'json', 'limit': 1, 'page': 1, 'metadata': 1}
         else:
-            body = {'returnFormat': 'count', 'ignore': 1}
-            source = 'body'
+            body = {'returnFormat': 'count'}
         body['query'] = query
-        return CountPlan(table=self.table, endpoint=f'/{self.table}/restSearch', body=body,
-                         source=source, spans=self.spans)
+        return CountPlan(table=self.table.name, endpoint=self.table.search, body=body,
+                         source=self.table.count, spans=self.spans)
 
     def node(self, node, path):
         self.spans[path] = (node.start, node.end)
@@ -170,8 +148,8 @@ class _Select:
         return {name: value if node.op == '=' else {node.op: value}}
 
     def field(self, field):
-        if field.table is not None and field.table != self.table:
-            raise MispQLError(f'{field.table} is not the table queried here ({self.table})',
+        if field.table is not None and field.table != self.table.name:
+            raise MispQLError(f'{field.table} is not the table queried here ({self.table.name})',
                               field.start, field.end)
         return field.name
 
@@ -181,17 +159,18 @@ class _Select:
         return field.name if field.table is None else f'{field.table}.{field.name}'
 
     def order(self):
-        sortable = SORTABLE[self.table]
+        table = self.table
         rules = []
         for i, item in enumerate(self.stmt.order):
-            if not sortable:
-                raise MispQLError(f'{self.table} cannot be sorted', item.start, item.end)
+            if not table.sortable:
+                raise MispQLError(f'{table.name} cannot be sorted', item.start, item.end)
             name = self.field(item.field)
-            if name not in sortable:
-                raise MispQLError(f'cannot sort {self.table} by {name}; use {", ".join(sortable)}',
-                                  item.field.start, item.field.end)
+            if name not in table.sortable:
+                raise MispQLError(
+                    f'cannot sort {table.name} by {name}; use {", ".join(table.sortable)}',
+                    item.field.start, item.field.end)
             self.spans[f'order[{i}]'] = (item.start, item.end)
-            rules.append(f'{sortable[name]} {"desc" if item.descending else "asc"}')
+            rules.append(f'{table.sortable[name]} {"desc" if item.descending else "asc"}')
         return rules
 
     def paging(self, verbatim):

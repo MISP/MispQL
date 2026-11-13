@@ -2,7 +2,6 @@
   "statement": "SELECT * FROM events WHERE id = 1 OR tags NOT LIKE 'tlp:%' LIMIT 1",
   "body": {
     "returnFormat": "json",
-    "ignore": 1,
     "limit": 1,
     "page": 1,
     "query": {

@@ -4,7 +4,6 @@
   "endpoint": "/attributes/restSearch",
   "body": {
     "returnFormat": "csv",
-    "ignore": 1,
     "limit": 1000,
     "page": 1,
     "query": {

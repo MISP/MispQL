@@ -93,7 +93,7 @@ def test_help_and_exit(misp, session):
 def test_ctrl_c_clears_the_statement(misp, session):
     misp.reply(ROWS)
     session('SELECT * FROM attributes\rWHERE id = 1\x03SELECT * FROM attributes LIMIT 3;\rquit\r')
-    assert [r['body'] for r in misp.requests] == [{'returnFormat': 'json', 'ignore': 1, 'limit': 3, 'page': 1}]
+    assert [r['body'] for r in misp.requests] == [{'returnFormat': 'json', 'limit': 3, 'page': 1}]
 
 
 def test_ctrl_c_abandons_a_running_query(misp, session, monkeypatch):
@@ -153,7 +153,9 @@ class Discovery:
         if self.fail:
             raise ClientError('HTTP 403: no', 403)
         return {'fields': {'events': {'id': {}, 'eventinfo': {}, 'event_timestamp': {}},
-                           'objects': {'id': {}, 'object_name': {}}}[table], 'limits': {}}
+                           'objects': {'id': {}, 'object_name': {}},
+                           'galaxy_clusters': {'id': {}, 'galaxy_name': {}, 'galaxy_namespace': {}}}[table],
+                'limits': {}}
 
 
 def offered(completions, text, cursor=None):
@@ -177,7 +179,8 @@ def test_completion_offers_the_statement_tables_fields():
     assert offered(completions, 'SELECT * FROM events WHERE o') == ['OFFSET', 'OR', 'ORDER', 'objects']
     assert offered(completions, 'SELECT ob FROM objects', cursor=9) == ['objects', 'object_name']
     assert offered(completions, 'SELECT * FROM objects LIMIT 1; SELECT * FROM events WHERE eventi') == ['eventinfo']
-    assert discovery.calls == ['/events/queryDescribe', '/objects/queryDescribe']
+    assert offered(completions, 'SELECT * FROM galaxy_clusters WHERE galaxy_n') == ['galaxy_name', 'galaxy_namespace']
+    assert discovery.calls == ['/events/queryDescribe', '/objects/queryDescribe', '/galaxy_clusters/queryDescribe']
 
 
 def test_completion_without_fields():
@@ -191,7 +194,9 @@ def test_completion_without_fields():
 
 
 def test_completion_on_an_empty_word():
-    assert offered(repl.Completions(None), 'SELECT * FROM ')[-3:] == ['attributes', 'events', 'objects']
+    assert offered(repl.Completions(None), 'SELECT * FROM ')[-4:] == [
+        'attributes', 'events', 'objects', 'galaxy_clusters']
+    assert offered(repl.Completions(None), 'SELECT * FROM gal') == ['galaxy_clusters']
 
 
 def test_no_completion_inside_a_string():

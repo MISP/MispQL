@@ -37,11 +37,15 @@ def test_rows_are_unwrapped(stub):
     stub.reply({'response': [{'Object': {'id': '9'}}]})
     stub.reply({'response': {'Attribute': []}})
     stub.reply({'response': []})
+    stub.reply({'response': [{'GalaxyCluster': {'id': '2', 'Galaxy': {'name': 'Threat Actor'}}}]})
     c = client(stub.url)
     assert c.run(plan_of('SELECT * FROM events LIMIT 1')) == [{'id': '7'}]
     assert c.run(plan_of('SELECT * FROM objects LIMIT 1')) == [{'id': '9'}]
     assert c.run(plan_of('SELECT * FROM attributes LIMIT 1')) == []
     assert c.run(plan_of('SELECT * FROM events LIMIT 1')) == []
+    assert c.run(plan_of('SELECT * FROM galaxy_clusters LIMIT 1')) == [
+        {'id': '2', 'Galaxy': {'name': 'Threat Actor'}}]
+    assert stub.requests[-1]['path'] == '/galaxy_clusters/restSearch'
 
 
 def test_unaligned_offset_reads_two_pages(stub):
@@ -84,9 +88,11 @@ def test_verbatim_format_returns_the_response(stub):
 def test_counts(stub):
     stub.reply({'response': [{'Event': {'id': '1'}}]}, headers={'X-Result-Count': '6375'})
     stub.reply(b'73890')
+    stub.reply(b'2028', headers={'X-Result-Count': '2028'})
     c = client(stub.url)
     assert c.run(plan_of('SELECT COUNT(*) FROM events WHERE id > 0')) == 6375
     assert c.run(plan_of("SELECT COUNT(*) FROM attributes WHERE type = 'md5'")) == 73890
+    assert c.run(plan_of("SELECT COUNT(*) FROM galaxy_clusters WHERE galaxy_name = 'Threat Actor'")) == 2028
     stub.reply({'response': []})
     with pytest.raises(ClientError, match='no count in the answer'):
         c.run(plan_of('SELECT COUNT(*) FROM events WHERE id > 0'))
@@ -156,19 +162,21 @@ def test_show_tables_leaves_out_a_table_that_refuses(stub):
     stub.reply(DISCOVERY)
     stub.reply(FORBIDDEN, status=403)
     stub.reply(DISCOVERY)
+    stub.reply({'message': 'Not found'}, status=404)
     assert client(stub.url).run(plan_of('SHOW TABLES')) == ['attributes', 'objects']
     assert [(r['method'], r['path']) for r in stub.requests] == [
-        ('GET', f'/{table}/queryDescribe') for table in ('attributes', 'events', 'objects')]
+        ('GET', f'/{table}/queryDescribe') for table in ('attributes', 'events', 'objects', 'galaxy_clusters')]
 
 
 def test_show_tables_fails_with_the_first_error_when_none_answers(stub):
     stub.reply(FORBIDDEN, status=403)
     stub.reply({'message': 'boom'}, status=500)
     stub.reply({'message': 'Not found'}, status=404)
+    stub.reply({'message': 'Not found'}, status=404)
     with pytest.raises(ClientError) as exc:
         client(stub.url).run(plan_of('SHOW TABLES'))
     assert str(exc.value) == f'HTTP 403: {FORBIDDEN["message"]}'
-    assert len(stub.requests) == 3
+    assert len(stub.requests) == 4
 
 
 def test_show_tables_stops_on_a_transport_error():
