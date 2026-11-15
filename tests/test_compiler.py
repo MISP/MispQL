@@ -8,6 +8,7 @@ import pytest
 from mispql.compiler import compile_statement
 from mispql.errors import MispQLError
 from mispql.parser import parse
+from mispql.tables import TABLES
 
 HERE = Path(__file__).parent
 GOLDEN = HERE / 'golden'
@@ -96,6 +97,15 @@ def test_errors(text, fragment, message):
         compile_one(text)
     assert exc.value.message == message
     assert text[exc.value.start:exc.value.end] == fragment
+
+
+def test_query_names_in_column_lists_become_row_keys():
+    for table in TABLES.values():
+        for name, key in table.aliases.items():
+            plan = compile_one(f'SELECT id, {table.name}.{name} FROM {table.name} LIMIT 1')
+            assert plan.columns == ['id', key], (table.name, name)
+    plan = compile_one("SELECT eventinfo, meta.org FROM events WHERE eventinfo = 'x' LIMIT 1")
+    assert (plan.columns, plan.body['query']) == (['info', 'meta.org'], {'eventinfo': 'x'})
 
 
 def test_unaligned_offset_is_fine_with_the_tools_renderings():

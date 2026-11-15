@@ -91,6 +91,21 @@ def test_flat_columns():
     assert warnings == ['no row has a column typo']
 
 
+def test_query_names_find_their_row_keys():
+    text, warnings = render('SELECT value, EventInfo, org, tags, published FROM attributes LIMIT 2 FORMAT flat',
+                            ATTRIBUTES)
+    assert text == (
+        'value,Event.info,Event.Orgc.name,Tag,published\n'
+        '1.2.3.4,"Phishing, round 2",CIRCL,"tlp:white,osint:source-type=""blog-post""",\n'
+        '"line one\nline ""two""","Phishing, round 2",CIRCL,,\n'
+    )
+    assert warnings == ['no row has a column published']
+    text, warnings = render('SELECT event_id, eventinfo, org, tags FROM events LIMIT 1 FORMAT table', EVENTS)
+    assert text.splitlines()[1] == '| id | info              | Orgc.name | Tag       |'
+    assert text.splitlines()[3] == '| 3  | Phishing, round 2 | CIRCL     | tlp:white |'
+    assert warnings == []
+
+
 def test_flat_without_rows():
     assert render('SELECT * FROM attributes LIMIT 1 FORMAT flat', []) == ('', [])
     assert render('SELECT id, value FROM attributes LIMIT 1 FORMAT flat', []) == ('id,value\n', [])

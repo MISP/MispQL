@@ -1,0 +1,42 @@
+{
+  "plan": "SearchPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "limit": 5,
+    "page": 1,
+    "order": [
+      "info desc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "eventinfo": {
+            "LIKE": "%phish%"
+          }
+        },
+        {
+          "org": "CIRCL"
+        }
+      ]
+    }
+  },
+  "output": "table",
+  "columns": [
+    "id",
+    "info",
+    "Orgc.name",
+    "Tag",
+    "timestamp"
+  ],
+  "skip": 0,
+  "spans": {
+    "query": "eventinfo LIKE '%phish%' AND org = 'CIRCL'",
+    "query.AND[0]": "eventinfo LIKE '%phish%'",
+    "query.AND[0].<unknown>": "eventinfo",
+    "query.AND[1]": "org = 'CIRCL'",
+    "query.AND[1].<unknown>": "org",
+    "order[0]": "eventinfo DESC"
+  }
+}

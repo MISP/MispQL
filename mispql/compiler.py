@@ -92,7 +92,8 @@ class _Select:
         verbatim = word if output == 'verbatim' else None
         columns = None
         if isinstance(stmt.columns, list):
-            columns = [self.field(column) for column in stmt.columns]
+            names = [self.field(column) for column in stmt.columns]
+            columns = [self.table.aliases.get(name, name) for name in names]
         query = None if stmt.where is None else self.node(stmt.where, 'query')
         order = self.order()
         limit, page, skip = self.paging(verbatim)
