@@ -154,7 +154,8 @@ class Discovery:
             raise ClientError('HTTP 403: no', 403)
         return {'fields': {'events': {'id': {}, 'eventinfo': {}, 'event_timestamp': {}},
                            'objects': {'id': {}, 'object_name': {}},
-                           'galaxy_clusters': {'id': {}, 'galaxy_name': {}, 'galaxy_namespace': {}, 'meta.<key>': {}}}[table],
+                           'galaxy_clusters': {'id': {}, 'galaxy_name': {}, 'galaxy_namespace': {}, 'meta.<key>': {}},
+                           'notes': {'id': {}, 'note': {}, 'note_type_name': {}, 'object_uuid': {}}}[table],
                 'limits': {}}
 
 
@@ -175,34 +176,39 @@ def test_completion_on_tab_only(misp, session, monkeypatch):
 def test_completion_offers_the_statement_tables_fields():
     discovery = Discovery()
     completions = repl.Completions(discovery)
-    assert offered(completions, 'SELECT * FROM events WHERE ev') == ['events', 'eventinfo', 'event_timestamp']
-    assert offered(completions, 'SELECT * FROM events WHERE o') == ['OFFSET', 'OR', 'ORDER', 'objects']
+    assert offered(completions, 'SELECT * FROM events WHERE ev') == [
+        'events', 'event_reports', 'eventinfo', 'event_timestamp']
+    assert offered(completions, 'SELECT * FROM events WHERE o') == [
+        'OFFSET', 'OR', 'ORDER', 'objects', 'opinions', 'organisations']
     assert offered(completions, 'SELECT ob FROM objects', cursor=9) == ['objects', 'object_name']
     assert offered(completions, 'SELECT * FROM objects LIMIT 1; SELECT * FROM events WHERE eventi') == ['eventinfo']
     assert offered(completions, 'SELECT * FROM galaxy_clusters WHERE galaxy_n') == ['galaxy_name', 'galaxy_namespace']
     assert offered(completions, 'SELECT * FROM galaxy_clusters WHERE me') == ['meta.']
-    assert discovery.calls == ['/events/queryDescribe', '/objects/queryDescribe', '/galaxy_clusters/queryDescribe']
+    assert offered(completions, 'SELECT * FROM notes WHERE no') == ['NOT', 'notes', 'note', 'note_type_name']
+    assert discovery.calls == ['/events/queryDescribe', '/objects/queryDescribe', '/galaxy_clusters/queryDescribe',
+                               '/analyst_data/queryDescribe/Note']
 
 
 def test_completion_without_fields():
     discovery = Discovery(fail=True)
     completions = repl.Completions(discovery)
-    assert offered(completions, 'SELECT * FROM events WHERE eve') == ['events']
-    assert offered(completions, 'SELECT * FROM events WHERE ev') == ['events']
-    assert offered(completions, 'SELECT * FROM nosuch WHERE eve') == ['events']
+    assert offered(completions, 'SELECT * FROM events WHERE eve') == ['events', 'event_reports']
+    assert offered(completions, 'SELECT * FROM events WHERE ev') == ['events', 'event_reports']
+    assert offered(completions, 'SELECT * FROM nosuch WHERE eve') == ['events', 'event_reports']
     assert discovery.calls == ['/events/queryDescribe']
-    assert offered(repl.Completions(None), 'SELECT * FROM events WHERE ev') == ['events']
+    assert offered(repl.Completions(None), 'SELECT * FROM events WHERE ev') == ['events', 'event_reports']
 
 
 def test_completion_on_an_empty_word():
-    assert offered(repl.Completions(None), 'SELECT * FROM ')[-4:] == [
-        'attributes', 'events', 'objects', 'galaxy_clusters']
+    assert offered(repl.Completions(None), 'SELECT * FROM ')[-11:] == [
+        'attributes', 'events', 'objects', 'galaxy_clusters', 'event_reports', 'notes', 'opinions',
+        'relationships', 'collections', 'tags', 'organisations']
     assert offered(repl.Completions(None), 'SELECT * FROM gal') == ['galaxy_clusters']
 
 
 def test_no_completion_inside_a_string():
     completions = repl.Completions(Discovery())
-    fields = ['events', 'eventinfo', 'event_timestamp']
+    fields = ['events', 'event_reports', 'eventinfo', 'event_timestamp']
     assert offered(completions, "SELECT * FROM events WHERE eventinfo LIKE 'ev") == []
     assert offered(completions, 'SELECT * FROM events WHERE eventinfo = "it\'s ev') == []
     assert offered(completions, "SELECT * FROM events WHERE eventinfo = 'it''s ev") == []

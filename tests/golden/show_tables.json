@@ -4,7 +4,14 @@
     "attributes": "/attributes/queryDescribe",
     "events": "/events/queryDescribe",
     "objects": "/objects/queryDescribe",
-    "galaxy_clusters": "/galaxy_clusters/queryDescribe"
+    "galaxy_clusters": "/galaxy_clusters/queryDescribe",
+    "event_reports": "/event_reports/queryDescribe",
+    "notes": "/analyst_data/queryDescribe/Note",
+    "opinions": "/analyst_data/queryDescribe/Opinion",
+    "relationships": "/analyst_data/queryDescribe/Relationship",
+    "collections": "/collections/queryDescribe",
+    "tags": "/tags/queryDescribe",
+    "organisations": "/organisations/queryDescribe"
   },
   "spans": {}
 }

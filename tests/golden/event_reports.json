@@ -1,0 +1,55 @@
+{
+  "plan": "SearchPlan",
+  "table": "event_reports",
+  "endpoint": "/event_reports/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "limit": 5,
+    "page": 2,
+    "order": [
+      "timestamp desc",
+      "id asc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "eventinfo": {
+            "LIKE": "%phish%"
+          }
+        },
+        {
+          "OR": [
+            {
+              "tags": "tlp:white"
+            },
+            {
+              "NOT": {
+                "deleted": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "output": "table",
+  "columns": [
+    "id",
+    "name",
+    "event.info"
+  ],
+  "skip": 2,
+  "spans": {
+    "query": "eventinfo LIKE '%phish%' AND (tags = 'tlp:white' OR NOT deleted = TRUE)",
+    "query.AND[0]": "eventinfo LIKE '%phish%'",
+    "query.AND[0].<unknown>": "eventinfo",
+    "query.AND[1]": "tags = 'tlp:white' OR NOT deleted = TRUE",
+    "query.AND[1].OR[0]": "tags = 'tlp:white'",
+    "query.AND[1].OR[0].<unknown>": "tags",
+    "query.AND[1].OR[1]": "NOT deleted = TRUE",
+    "query.AND[1].OR[1].NOT": "deleted = TRUE",
+    "query.AND[1].OR[1].NOT.<unknown>": "deleted",
+    "order[0]": "timestamp DESC",
+    "order[1]": "event_reports.id"
+  }
+}

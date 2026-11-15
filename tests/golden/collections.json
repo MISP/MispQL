@@ -1,0 +1,53 @@
+{
+  "plan": "SearchPlan",
+  "table": "collections",
+  "endpoint": "/collections/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "limit": 10,
+    "page": 1,
+    "order": [
+      "modified desc"
+    ],
+    "query": {
+      "OR": [
+        {
+          "element_type": "Event"
+        },
+        {
+          "AND": [
+            {
+              "name": {
+                "LIKE": "apt%"
+              }
+            },
+            {
+              "distribution": {
+                "<": 3
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "output": "table",
+  "columns": [
+    "id",
+    "name",
+    "orgc.name",
+    "element_count"
+  ],
+  "skip": 0,
+  "spans": {
+    "query": "element_type = 'Event' OR (name LIKE 'apt%' AND distribution < 3)",
+    "query.OR[0]": "element_type = 'Event'",
+    "query.OR[0].<unknown>": "element_type",
+    "query.OR[1]": "name LIKE 'apt%' AND distribution < 3",
+    "query.OR[1].AND[0]": "name LIKE 'apt%'",
+    "query.OR[1].AND[0].<unknown>": "name",
+    "query.OR[1].AND[1]": "distribution < 3",
+    "query.OR[1].AND[1].<unknown>": "distribution",
+    "order[0]": "modified DESC"
+  }
+}

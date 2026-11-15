@@ -1,6 +1,7 @@
 """The interactive prompt: statements typed at a terminal, run one submission at a time."""
 import os
 import re
+import textwrap
 import threading
 from pathlib import Path
 
@@ -20,7 +21,7 @@ HELP = f"""\
 SELECT * | COUNT(*) | field, ... FROM table
   [WHERE condition] [ORDER BY field [ASC|DESC], ...] [LIMIT n [OFFSET n]] [FORMAT word];
 DESCRIBE table;  SHOW TABLES;
-tables: {', '.join(TABLES)}
+{textwrap.fill('tables: ' + ', '.join(TABLES), 100, subsequent_indent='  ')}
 condition: field = != < > <= >= value | field [NOT] IN (value, ...) | field [NOT] LIKE 'a%',
   combined with AND, OR, NOT and parentheses; values are 'text', 123, TRUE or FALSE
 FORMAT table and flat are rendered here; any other word is MISP's format, printed as sent.

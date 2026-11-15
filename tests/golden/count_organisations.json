@@ -1,0 +1,16 @@
+{
+  "plan": "CountPlan",
+  "table": "organisations",
+  "endpoint": "/organisations/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "local": false
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "local = FALSE",
+    "query.<unknown>": "local"
+  }
+}

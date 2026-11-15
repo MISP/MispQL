@@ -1,0 +1,22 @@
+{
+  "plan": "CountPlan",
+  "table": "event_reports",
+  "endpoint": "/event_reports/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "event_id": {
+        "IN": [
+          1,
+          2,
+          3
+        ]
+      }
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "event_id IN (1, 2, 3)",
+    "query.<unknown>": "event_id"
+  }
+}

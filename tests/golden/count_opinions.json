@@ -1,0 +1,18 @@
+{
+  "plan": "CountPlan",
+  "table": "opinions",
+  "endpoint": "/analyst_data/restSearch/Opinion",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "opinion": {
+        "<": 50
+      }
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "opinion < 50",
+    "query.<unknown>": "opinion"
+  }
+}

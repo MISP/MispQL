@@ -1,0 +1,42 @@
+{
+  "plan": "SearchPlan",
+  "table": "opinions",
+  "endpoint": "/analyst_data/restSearch/Opinion",
+  "body": {
+    "returnFormat": "json",
+    "limit": 3,
+    "page": 1,
+    "order": [
+      "opinion desc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "opinion": {
+            ">=": 50
+          }
+        },
+        {
+          "authors": {
+            "LIKE": "%circl%"
+          }
+        }
+      ]
+    }
+  },
+  "output": "flat",
+  "columns": [
+    "id",
+    "opinion",
+    "comment"
+  ],
+  "skip": 0,
+  "spans": {
+    "query": "opinion >= 50 AND authors LIKE '%circl%'",
+    "query.AND[0]": "opinion >= 50",
+    "query.AND[0].<unknown>": "opinion",
+    "query.AND[1]": "authors LIKE '%circl%'",
+    "query.AND[1].<unknown>": "authors",
+    "order[0]": "opinion DESC"
+  }
+}

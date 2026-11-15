@@ -1,0 +1,43 @@
+{
+  "plan": "SearchPlan",
+  "table": "organisations",
+  "endpoint": "/organisations/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "limit": 25,
+    "page": 2,
+    "order": [
+      "name asc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "local": true
+        },
+        {
+          "sector": {
+            "IN": [
+              "Government",
+              "Financial"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "output": "default",
+  "columns": [
+    "id",
+    "name",
+    "user_count"
+  ],
+  "skip": 0,
+  "spans": {
+    "query": "local = TRUE AND sector IN ('Government', 'Financial')",
+    "query.AND[0]": "local = TRUE",
+    "query.AND[0].<unknown>": "local",
+    "query.AND[1]": "sector IN ('Government', 'Financial')",
+    "query.AND[1].<unknown>": "sector",
+    "order[0]": "name"
+  }
+}

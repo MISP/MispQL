@@ -1,0 +1,16 @@
+{
+  "plan": "CountPlan",
+  "table": "relationships",
+  "endpoint": "/analyst_data/restSearch/Relationship",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "related_object_type": "Event"
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "related_object_type = 'Event'",
+    "query.<unknown>": "related_object_type"
+  }
+}

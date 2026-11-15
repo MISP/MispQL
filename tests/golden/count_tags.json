@@ -1,0 +1,16 @@
+{
+  "plan": "CountPlan",
+  "table": "tags",
+  "endpoint": "/tags/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "is_galaxy": true
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "is_galaxy = TRUE",
+    "query.<unknown>": "is_galaxy"
+  }
+}

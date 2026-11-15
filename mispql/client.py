@@ -79,7 +79,9 @@ class Client:
             # {"response": {"Attribute": [...]}}, {"response": [{"Event": {...}}, ...]}
             if isinstance(found, dict):
                 return found[key]
-            return [item[key] for item in found]
+            # Keys beside the row's own ({"Collection": {...}, "Orgc": {...}}) join the row.
+            return [{**item[key], **{k: v for k, v in item.items() if k != key and k not in item[key]}}
+                    for item in found]
         except (ValueError, KeyError, TypeError):
             raise ClientError(f'{plan.endpoint}: unexpected answer') from None
 

@@ -111,13 +111,21 @@ def test_describe_and_show_tables(misp, run):
     misp.reply({'message': 'You do not have the permission to use complex queries.'}, status=403)
     misp.reply(found)
     misp.reply({'message': 'Not found'}, status=404)
+    misp.reply({'message': 'Not found'}, status=404)
+    misp.reply(found)
+    for _ in range(4):
+        misp.reply({'message': 'Not found'}, status=404)
+    misp.reply({'message': 'You do not have permission to use this functionality.'}, status=403)
     code, out, err = run('-v', '-e', 'DESCRIBE objects; SHOW TABLES')
     assert code == 0
     assert out.endswith('1 field\nORDER BY: none\nlimits: max_depth 5\n'
                         '+------------+\n| table      |\n+------------+\n| attributes |\n| objects    |\n'
-                        '+------------+\n2 tables\n')
-    assert err == ''.join(f'GET {misp.url}/{table}/queryDescribe\n'
-                          for table in ('objects', 'attributes', 'events', 'objects', 'galaxy_clusters'))
+                        '| notes      |\n+------------+\n3 tables\n')
+    paths = [f'/{table}/queryDescribe' for table in ('objects', 'attributes', 'events', 'objects',
+                                                     'galaxy_clusters', 'event_reports')]
+    paths += [f'/analyst_data/queryDescribe/{kind}' for kind in ('Note', 'Opinion', 'Relationship')]
+    paths += [f'/{table}/queryDescribe' for table in ('collections', 'tags', 'organisations')]
+    assert err == ''.join(f'GET {misp.url}{path}\n' for path in paths)
 
 
 def test_describe_fails_like_any_statement(misp, run):
@@ -209,7 +217,10 @@ def test_dry_run_sends_nothing(run):
         f'POST /events/restSearch\n{json.dumps(count, indent=2)}\n'
         'GET /events/queryDescribe\n'
         'GET /attributes/queryDescribe\nGET /events/queryDescribe\nGET /objects/queryDescribe\n'
-        'GET /galaxy_clusters/queryDescribe\n'
+        'GET /galaxy_clusters/queryDescribe\nGET /event_reports/queryDescribe\n'
+        'GET /analyst_data/queryDescribe/Note\nGET /analyst_data/queryDescribe/Opinion\n'
+        'GET /analyst_data/queryDescribe/Relationship\nGET /collections/queryDescribe\n'
+        'GET /tags/queryDescribe\nGET /organisations/queryDescribe\n'
     )
 
 

@@ -38,11 +38,20 @@ def test_golden(case):
     assert got == json.loads(expected.read_text())
 
 
+ALL_TABLES = ('attributes, events, objects, galaxy_clusters, event_reports, notes, opinions, relationships, '
+              'collections, tags or organisations')
+
+
 @pytest.mark.parametrize('text, fragment, message', [
-    ('SELECT * FROM tags LIMIT 1', 'tags',
-     'unknown table tags: use attributes, events, objects or galaxy_clusters'),
-    ('DESCRIBE `Attributes`', '`Attributes`',
-     'unknown table Attributes: use attributes, events, objects or galaxy_clusters'),
+    ('SELECT * FROM sightings LIMIT 1', 'sightings', f'unknown table sightings: use {ALL_TABLES}'),
+    ('DESCRIBE `Attributes`', '`Attributes`', f'unknown table Attributes: use {ALL_TABLES}'),
+    ('SELECT * FROM tags ORDER BY colour LIMIT 1', 'colour',
+     'cannot sort tags by colour; use id, name, numerical_value'),
+    ('SELECT * FROM notes ORDER BY note LIMIT 1', 'note',
+     'cannot sort notes by note; use id, created, modified, distribution'),
+    ("SELECT * FROM opinions WHERE notes.id = 1", 'notes.id', 'notes is not the table queried here (opinions)'),
+    ('SELECT tags.name FROM event_reports LIMIT 1', 'tags.name',
+     'tags is not the table queried here (event_reports)'),
     ('SELECT * FROM galaxy_clusters ORDER BY description LIMIT 1', 'description',
      'cannot sort galaxy_clusters by description; use id, version, type, value, distribution, orgc_id, '
      'org_id, tag_name, galaxy_id'),
@@ -116,6 +125,40 @@ LOCATED = {
         'query.AND[0].org': "org LIKE 'MISP%'",
         'query.AND[1].<unknown>': 'nosuch',
         'query.AND[2].default': "default = 'yes'",
+    },
+    'event_report_leaves': {
+        'query.AND[0].<unknown>': 'nosuch',
+        'query.AND[1].name': "name LIKE 'a%b'",
+        'query.AND[2].OR[0].eventinfo': 'eventinfo = 5',
+        'query.AND[2].OR[1].date': "date > 'soon'",
+    },
+    'note_leaves': {
+        'query.OR[0].created': "created > 'tomorrow'",
+        'query.OR[1].note': "note IN ('a', 1)",
+        'query.OR[2].locked': "locked = 'yes'",
+    },
+    'opinion_leaves': {
+        'query.AND[0].opinion': "opinion > 'high'",
+        'query.AND[1].NOT.comment': "comment LIKE '%a%b%'",
+    },
+    'relationship_leaves': {
+        'query.AND[0].<unknown>': 'related_object',
+        'query.AND[1].relationship_type': "relationship_type != ''",
+    },
+    'collection_leaves': {
+        'query.OR[0].element_type': 'element_type = 1',
+        'query.OR[1].NOT.AND[0].element_uuid': "element_uuid LIKE 'a%b'",
+        'query.OR[1].NOT.AND[1].<unknown>': 'element_count',
+    },
+    'tag_leaves': {
+        'query.AND[0].colour': "colour LIKE '#ff%'",
+        'query.AND[1].<unknown>': '`count`',
+        'query.AND[2].numerical_value': "numerical_value = 'x'",
+    },
+    'organisation_leaves': {
+        'query.OR[0].<unknown>': 'user_count',
+        'query.OR[1].uuid': "uuid LIKE 'a%'",
+        'query.OR[2].date_created': "date_created > 'soon'",
     },
     'too_deep': {
         'query.AND[0].OR[0].AND[0].OR[0].AND[0]': 'id = 1',

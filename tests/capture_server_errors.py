@@ -27,6 +27,23 @@ STATEMENTS = {
     'galaxy_cluster_meta': (
         "SELECT * FROM galaxy_clusters WHERE meta.synonyms > 'x' OR meta.`Additional Content Note` = 1 LIMIT 1"
     ),
+    'event_report_leaves': (
+        "SELECT * FROM event_reports WHERE nosuch = 1 AND name LIKE 'a%b' AND (eventinfo = 5 OR date > 'soon')"
+        " LIMIT 1"
+    ),
+    'note_leaves': "SELECT * FROM notes WHERE created > 'tomorrow' OR note IN ('a', 1) OR locked = 'yes' LIMIT 1",
+    'opinion_leaves': "SELECT * FROM opinions WHERE opinion > 'high' AND NOT comment LIKE '%a%b%' LIMIT 1",
+    'relationship_leaves': (
+        "SELECT * FROM relationships WHERE related_object = 'x' AND relationship_type != '' LIMIT 1"
+    ),
+    'collection_leaves': (
+        "SELECT * FROM collections WHERE element_type = 1 OR NOT (element_uuid LIKE 'a%b' AND element_count > 1)"
+        " LIMIT 1"
+    ),
+    'tag_leaves': "SELECT * FROM tags WHERE colour LIKE '#ff%' AND `count` > 1 AND numerical_value = 'x' LIMIT 1",
+    'organisation_leaves': (
+        "SELECT * FROM organisations WHERE user_count > 1 OR uuid LIKE 'a%' OR date_created > 'soon' LIMIT 1"
+    ),
     'too_deep': (
         "SELECT * FROM events WHERE ((((id = 1 AND id = 2) OR id = 3) AND id = 4) OR id = 5)"
         " AND id = 6 LIMIT 1"

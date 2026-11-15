@@ -1,0 +1,42 @@
+{
+  "statement": "SELECT * FROM opinions WHERE opinion > 'high' AND NOT comment LIKE '%a%b%' LIMIT 1",
+  "body": {
+    "returnFormat": "json",
+    "limit": 1,
+    "page": 1,
+    "query": {
+      "AND": [
+        {
+          "opinion": {
+            ">": "high"
+          }
+        },
+        {
+          "NOT": {
+            "comment": {
+              "LIKE": "%a%b%"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "status": 400,
+  "reply": {
+    "name": "Invalid query",
+    "message": "2 errors",
+    "url": "/analyst_data/restSearch/Opinion",
+    "errors": [
+      {
+        "path": "query.AND[0].opinion",
+        "code": "bad_type",
+        "message": "this field expects an integer"
+      },
+      {
+        "path": "query.AND[1].NOT.comment",
+        "code": "bad_type",
+        "message": "LIKE takes a leading and/or trailing %, nothing else"
+      }
+    ]
+  }
+}

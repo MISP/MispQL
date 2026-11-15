@@ -48,6 +48,50 @@ def test_rows_are_unwrapped(stub):
     assert stub.requests[-1]['path'] == '/galaxy_clusters/restSearch'
 
 
+TABLE_ROWS = [
+    ('event_reports', '/event_reports/restSearch',
+     [{'EventReport': {'id': '4', 'Event': {'id': '1', 'info': 'Phishing'}, 'Tag': []}}],
+     [{'id': '4', 'Event': {'id': '1', 'info': 'Phishing'}, 'Tag': []}]),
+    ('notes', '/analyst_data/restSearch/Note', [{'Note': {'id': '5', 'note': 'n'}}], [{'id': '5', 'note': 'n'}]),
+    ('opinions', '/analyst_data/restSearch/Opinion', [{'Opinion': {'id': '6'}}], [{'id': '6'}]),
+    ('relationships', '/analyst_data/restSearch/Relationship', [{'Relationship': {'id': '7', 'related_object': []}}],
+     [{'id': '7', 'related_object': []}]),
+    ('collections', '/collections/restSearch',
+     [{'Collection': {'id': '8', 'element_count': 1}, 'Orgc': {'id': '1', 'name': 'CIRCL'},
+       'SharingGroup': {'id': None}, 'CollectionElement': [{'id': '9'}]}],
+     [{'id': '8', 'element_count': 1, 'Orgc': {'id': '1', 'name': 'CIRCL'}, 'SharingGroup': {'id': None},
+       'CollectionElement': [{'id': '9'}]}]),
+    ('tags', '/tags/restSearch',
+     [{'Tag': {'id': '1', 'Taxonomy': {'namespace': 'tlp'}, 'count': 3}}, {'Tag': {'id': '2'}}],
+     [{'id': '1', 'Taxonomy': {'namespace': 'tlp'}, 'count': 3}, {'id': '2'}]),
+    ('organisations', '/organisations/restSearch', [{'Organisation': {'id': '1', 'user_count': '2'}}],
+     [{'id': '1', 'user_count': '2'}]),
+]
+
+
+@pytest.mark.parametrize('table, path, reply, rows', TABLE_ROWS)
+def test_rows_of_each_table(stub, table, path, reply, rows):
+    stub.reply({'response': reply})
+    assert client(stub.url).run(plan_of(f'SELECT * FROM {table} LIMIT 2')) == rows
+    [request] = stub.requests
+    assert request['path'] == path
+
+
+def test_keys_beside_the_row_follow_its_own_and_never_replace_them(stub):
+    stub.reply({'response': [{'Orgc': {'name': 'beside'}, 'Collection': {'id': '8', 'Orgc': {'name': 'own'}},
+                              'SharingGroup': {'id': None}}]})
+    [row] = client(stub.url).run(plan_of('SELECT * FROM collections LIMIT 1'))
+    assert list(row.items()) == [('id', '8'), ('Orgc', {'name': 'own'}), ('SharingGroup', {'id': None})]
+
+
+@pytest.mark.parametrize('table, path', [(table, path) for table, path, _, _ in TABLE_ROWS])
+def test_count_of_each_table(stub, table, path):
+    stub.reply(b'12')
+    assert client(stub.url).run(plan_of(f'SELECT COUNT(*) FROM {table} WHERE id > 0')) == 12
+    [request] = stub.requests
+    assert (request['path'], request['body']) == (path, {'returnFormat': 'count', 'query': {'id': {'>': 0}}})
+
+
 def test_unaligned_offset_reads_two_pages(stub):
     plan = plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 4')
     stub.reply({'response': {'Attribute': [{'id': i} for i in (3, 4, 5)]}})
@@ -158,25 +202,38 @@ def test_describe(stub):
         client(stub.url).run(plan_of('DESCRIBE events'))
 
 
+SHOW_TABLES_PATHS = [
+    *(f'/{table}/queryDescribe' for table in ('attributes', 'events', 'objects', 'galaxy_clusters',
+                                              'event_reports')),
+    *(f'/analyst_data/queryDescribe/{kind}' for kind in ('Note', 'Opinion', 'Relationship')),
+    *(f'/{table}/queryDescribe' for table in ('collections', 'tags', 'organisations')),
+]
+
+
 def test_show_tables_leaves_out_a_table_that_refuses(stub):
     stub.reply(DISCOVERY)
     stub.reply(FORBIDDEN, status=403)
     stub.reply(DISCOVERY)
-    stub.reply({'message': 'Not found'}, status=404)
-    assert client(stub.url).run(plan_of('SHOW TABLES')) == ['attributes', 'objects']
-    assert [(r['method'], r['path']) for r in stub.requests] == [
-        ('GET', f'/{table}/queryDescribe') for table in ('attributes', 'events', 'objects', 'galaxy_clusters')]
+    for _ in range(4):
+        stub.reply({'message': 'Not found'}, status=404)
+    stub.reply(DISCOVERY)
+    stub.reply(DISCOVERY)
+    stub.reply(DISCOVERY)
+    stub.reply({'message': 'You do not have permission to use this functionality.'}, status=403)
+    assert client(stub.url).run(plan_of('SHOW TABLES')) == [
+        'attributes', 'objects', 'relationships', 'collections', 'tags']
+    assert [(r['method'], r['path']) for r in stub.requests] == [('GET', path) for path in SHOW_TABLES_PATHS]
 
 
 def test_show_tables_fails_with_the_first_error_when_none_answers(stub):
     stub.reply(FORBIDDEN, status=403)
     stub.reply({'message': 'boom'}, status=500)
-    stub.reply({'message': 'Not found'}, status=404)
-    stub.reply({'message': 'Not found'}, status=404)
+    for _ in range(9):
+        stub.reply({'message': 'Not found'}, status=404)
     with pytest.raises(ClientError) as exc:
         client(stub.url).run(plan_of('SHOW TABLES'))
     assert str(exc.value) == f'HTTP 403: {FORBIDDEN["message"]}'
-    assert len(stub.requests) == 4
+    assert len(stub.requests) == 11
 
 
 def test_show_tables_stops_on_a_transport_error():

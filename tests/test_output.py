@@ -155,6 +155,58 @@ def test_galaxy_cluster_default_columns():
     )
 
 
+ANALYST_DATA = {
+    'id': '5', 'uuid': 'a1', 'object_uuid': 'e1', 'object_type': 'Event', 'authors': 'analyst@circl.lu',
+    'created': '2026-11-01 10:00:00', 'modified': '2026-11-02 10:00:00', 'distribution': '1', 'locked': False,
+}
+
+
+# Rows as the client hands them over: keys beside the row's own key already joined it.
+@pytest.mark.parametrize('table, row, cells', [
+    ('event_reports',
+     {'id': '4', 'uuid': 'r1', 'event_id': '1', 'name': 'Report', 'content': '# long', 'distribution': '5',
+      'timestamp': '1700000000', 'deleted': False, 'Event': {'id': '1', 'info': 'Phishing', 'Orgc': {'name': 'CIRCL'}},
+      'Tag': [{'name': 'tlp:white'}]},
+     {'id': '4', 'event_id': '1', 'name': 'Report', 'Event.info': 'Phishing', 'distribution': '5',
+      'timestamp': '1700000000', 'Tag': 'tlp:white'}),
+    ('notes', {**ANALYST_DATA, 'note': 'seen in the wild', 'language': 'en', 'note_type_name': 'Note'},
+     {'id': '5', 'object_type': 'Event', 'object_uuid': 'e1', 'note': 'seen in the wild',
+      'authors': 'analyst@circl.lu', 'created': '2026-11-01 10:00:00'}),
+    ('opinions', {**ANALYST_DATA, 'opinion': '75', 'comment': 'likely', 'note_type_name': 'Opinion'},
+     {'id': '5', 'object_type': 'Event', 'object_uuid': 'e1', 'opinion': '75', 'comment': 'likely',
+      'authors': 'analyst@circl.lu'}),
+    ('relationships',
+     {**ANALYST_DATA, 'relationship_type': 'related-to', 'related_object_uuid': 'e2', 'related_object_type': 'Event',
+      'related_object': [{'Event': {'id': '2'}}]},
+     {'id': '5', 'object_type': 'Event', 'object_uuid': 'e1', 'relationship_type': 'related-to',
+      'related_object_type': 'Event', 'related_object_uuid': 'e2'}),
+    ('collections',
+     {'id': '8', 'uuid': 'c1', 'name': 'APT set', 'type': 'campaign', 'created': '2026-10-01 09:00:00',
+      'modified': '2026-11-01 09:00:00', 'distribution': '0', 'element_count': 2, 'RelationshipInbound': [],
+      'Orgc': {'id': '1', 'name': 'CIRCL'}, 'SharingGroup': {'id': None},
+      'CollectionElement': [{'element_uuid': 'e1'}, {'element_uuid': 'e2'}]},
+     {'id': '8', 'name': 'APT set', 'type': 'campaign', 'Orgc.name': 'CIRCL', 'distribution': '0',
+      'element_count': '2', 'modified': '2026-11-01 09:00:00'}),
+    ('tags',
+     {'id': '1', 'name': 'tlp:white', 'colour': '#ffffff', 'exportable': True, 'hide_tag': False,
+      'numerical_value': None, 'is_galaxy': False, 'favourite': False, 'count': 3, 'attribute_count': 0,
+      'Taxonomy': {'namespace': 'tlp'}},
+     {'id': '1', 'name': 'tlp:white', 'numerical_value': '', 'hide_tag': 'false', 'is_galaxy': 'false',
+      'count': '3', 'attribute_count': '0'}),
+    ('organisations',
+     {'id': '1', 'name': 'CIRCL', 'type': 'CSIRT', 'nationality': 'Luxembourg', 'sector': 'Government',
+      'uuid': 'o1', 'local': True, 'restricted_to_domain': [], 'landingpage': None, 'user_count': '12'},
+     {'id': '1', 'name': 'CIRCL', 'type': 'CSIRT', 'nationality': 'Luxembourg', 'sector': 'Government',
+      'local': 'true', 'user_count': '12'}),
+])
+def test_default_columns_of_each_table(table, row, cells):
+    text, warnings = render(f'SELECT * FROM {table} LIMIT 1 FORMAT table', [row])
+    assert warnings == []
+    header, line = ([cell.strip() for cell in text.splitlines()[i].split('|')[1:-1]] for i in (1, 3))
+    assert dict(zip(header, line)) == cells
+    assert header == list(cells)
+
+
 def test_galaxy_cluster_flat_keeps_authors_and_leaves_out_elements():
     text, _ = render("SELECT * FROM galaxy_clusters WHERE id = 2 FORMAT flat", GALAXY_CLUSTERS)
     header, row = text.splitlines()
@@ -218,6 +270,8 @@ def test_describe():
     assert render('DESCRIBE objects', found)[0].splitlines()[-2] == 'ORDER BY: none'
     assert render('DESCRIBE galaxy_clusters', found)[0].splitlines()[-2] == (
         'ORDER BY: id, version, type, value, distribution, orgc_id, org_id, tag_name, galaxy_id')
+    assert render('DESCRIBE relationships', found)[0].splitlines()[-2] == (
+        'ORDER BY: id, created, modified, distribution, relationship_type')
 
 
 def test_show_tables():

@@ -1,0 +1,19 @@
+{
+  "plan": "CountPlan",
+  "table": "collections",
+  "endpoint": "/collections/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "NOT": {
+        "element_type": "Attribute"
+      }
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "NOT element_type = 'Attribute'",
+    "query.NOT": "element_type = 'Attribute'",
+    "query.NOT.<unknown>": "element_type"
+  }
+}

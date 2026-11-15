@@ -1,0 +1,41 @@
+{
+  "plan": "SearchPlan",
+  "table": "tags",
+  "endpoint": "/tags/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "limit": 50,
+    "page": 1,
+    "order": [
+      "numerical_value desc",
+      "name asc"
+    ],
+    "query": {
+      "AND": [
+        {
+          "name": {
+            "LIKE": "tlp:%"
+          }
+        },
+        {
+          "NOT": {
+            "hide_tag": true
+          }
+        }
+      ]
+    }
+  },
+  "output": "table",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "name LIKE 'tlp:%' AND NOT hide_tag = TRUE",
+    "query.AND[0]": "name LIKE 'tlp:%'",
+    "query.AND[0].<unknown>": "name",
+    "query.AND[1]": "NOT hide_tag = TRUE",
+    "query.AND[1].NOT": "hide_tag = TRUE",
+    "query.AND[1].NOT.<unknown>": "hide_tag",
+    "order[0]": "numerical_value DESC",
+    "order[1]": "name"
+  }
+}

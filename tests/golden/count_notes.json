@@ -1,0 +1,16 @@
+{
+  "plan": "CountPlan",
+  "table": "notes",
+  "endpoint": "/analyst_data/restSearch/Note",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "language": "en"
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "language = 'en'",
+    "query.<unknown>": "language"
+  }
+}
