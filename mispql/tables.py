@@ -11,8 +11,8 @@ class Table:
     sortable: dict
     columns: tuple  # FORMAT table without a column list
     # body: returnFormat count, the number is the reply; header: X-Result-Count of a
-    # one-row metadata page; None: no COUNT(*)
-    count: str | None
+    # one-row metadata page
+    count: str
     path: str = '/{name}/{action}'  # the endpoints, action being restSearch or queryDescribe
 
     @property
@@ -56,7 +56,7 @@ TABLES = {table.name: table for table in (
         row_key='Object',
         sortable={},
         columns=('id', 'event_id', 'name', 'meta-category', 'comment', 'timestamp'),
-        count=None,
+        count='body',
     ),
     Table(
         name='galaxy_clusters',

@@ -78,7 +78,6 @@ ALL_TABLES = ('attributes, events, objects, galaxy_clusters, event_reports, note
     ('SELECT * FROM attributes ORDER BY attributes.id, events.id LIMIT 1', 'events.id',
      'events is not the table queried here (attributes)'),
     ('SELECT * FROM objects ORDER BY id DESC LIMIT 1', 'id DESC', 'objects cannot be sorted'),
-    ('SELECT COUNT(*) FROM objects WHERE id = 1', 'objects', 'COUNT(*) is not available on objects'),
     ('SELECT COUNT(*) FROM events', 'COUNT(*)', 'COUNT(*) needs a WHERE'),
     ('SELECT COUNT(*) FROM events LIMIT 5', 'COUNT(*)', 'COUNT(*) needs a WHERE'),
     ('SELECT COUNT(*) FROM events WHERE id > 1 ORDER BY id DESC', 'id DESC', 'COUNT(*) takes no ORDER BY'),

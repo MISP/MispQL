@@ -112,9 +112,6 @@ class _Select:
 
     def count(self):
         stmt = self.stmt
-        if self.table.count is None:
-            raise MispQLError(f'COUNT(*) is not available on {self.table.name}',
-                              stmt.table.start, stmt.table.end)
         if stmt.where is None:
             raise MispQLError('COUNT(*) needs a WHERE', stmt.columns.start, stmt.columns.end)
         query = self.node(stmt.where, 'query')

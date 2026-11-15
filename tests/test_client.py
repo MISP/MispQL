@@ -84,7 +84,8 @@ def test_keys_beside_the_row_follow_its_own_and_never_replace_them(stub):
     assert list(row.items()) == [('id', '8'), ('Orgc', {'name': 'own'}), ('SharingGroup', {'id': None})]
 
 
-@pytest.mark.parametrize('table, path', [(table, path) for table, path, _, _ in TABLE_ROWS])
+@pytest.mark.parametrize('table, path', [(table, path) for table, path, _, _ in TABLE_ROWS]
+                         + [('objects', '/objects/restSearch')])
 def test_count_of_each_table(stub, table, path):
     stub.reply(b'12')
     assert client(stub.url).run(plan_of(f'SELECT COUNT(*) FROM {table} WHERE id > 0')) == 12

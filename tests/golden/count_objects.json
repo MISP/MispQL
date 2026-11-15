@@ -1,0 +1,35 @@
+{
+  "plan": "CountPlan",
+  "table": "objects",
+  "endpoint": "/objects/restSearch",
+  "body": {
+    "returnFormat": "count",
+    "query": {
+      "AND": [
+        {
+          "object_name": "domain-ip"
+        },
+        {
+          "event_timestamp": {
+            ">=": "7d"
+          }
+        },
+        {
+          "value": {
+            "LIKE": "%.example.com"
+          }
+        }
+      ]
+    }
+  },
+  "source": "body",
+  "spans": {
+    "query": "object_name = 'domain-ip' AND event_timestamp >= '7d' AND value LIKE '%.example.com'",
+    "query.AND[0]": "object_name = 'domain-ip'",
+    "query.AND[0].<unknown>": "object_name",
+    "query.AND[1]": "event_timestamp >= '7d'",
+    "query.AND[1].<unknown>": "event_timestamp",
+    "query.AND[2]": "value LIKE '%.example.com'",
+    "query.AND[2].<unknown>": "value"
+  }
+}
