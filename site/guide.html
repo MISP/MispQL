@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MispQL guide</title>
+<meta name="description" content="The MispQL language and the mispql command-line client: setup, statements, conditions, output formats and every table.">
+<link rel="stylesheet" href="style.css">
+<script src="copy.js" defer></script>
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="index.html">
+    <picture>
+      <source srcset="misp-logo-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="misp-logo.png" alt="MISP" width="123" height="36">
+    </picture>
+    <span>MispQL</span>
+  </a>
+  <nav><a href="index.html">Overview</a><a href="guide.html" aria-current="page">Guide</a></nav>
+</header>
+<main class="guide">
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#setup">Setting up</a></li>
+    <li><a href="#running">Running mispql</a></li>
+    <li><a href="#statements">Statements</a></li>
+    <li><a href="#conditions">Conditions</a></li>
+    <li><a href="#columns">Columns</a></li>
+    <li><a href="#sorting">Sorting and paging</a></li>
+    <li><a href="#formats">Output formats</a></li>
+    <li><a href="#counting">Counting</a></li>
+    <li><a href="#tables">Tables</a>
+      <ol>
+        <li><a href="#table-attributes">attributes</a></li>
+        <li><a href="#table-events">events</a></li>
+        <li><a href="#table-objects">objects</a></li>
+        <li><a href="#table-galaxy_clusters">galaxy_clusters</a></li>
+        <li><a href="#table-event_reports">event_reports</a></li>
+        <li><a href="#table-notes">notes, opinions, relationships</a></li>
+        <li><a href="#table-collections">collections</a></li>
+        <li><a href="#table-tags">tags</a></li>
+        <li><a href="#table-organisations">organisations</a></li>
+      </ol>
+    </li>
+    <li><a href="#discovery">Fields and discovery</a></li>
+    <li><a href="#errors">Errors</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#large">Large events</a></li>
+  </ol>
+</nav>
+<article>
+<section class="prose">
+<h1>The MispQL guide</h1>
+<p>MispQL is an SQL-like language for searching MISP; <code>mispql</code> is the command-line
+client that speaks it. This guide covers both. Every example shows the statement and the
+request it turns into, exactly as <code>mispql --dry-run</code> prints it.</p>
+
+<h2 id="how">How it works</h2>
+<p>A statement names a table, the conditions rows must meet, and how to print them. mispql
+checks the whole statement, compiles it into one request to that table's
+<code>restSearch</code> endpoint, with the conditions as the request's <code>query</code>,
+and sends it with your API key. MISP evaluates the conditions within what your user may see,
+as on any other API call, and mispql prints the rows it answers with.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes WHERE type = 'domain' AND value LIKE '%.example.com' LIMIT 50</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "type": "domain"
+      },
+      {
+        "value": {
+          "LIKE": "%.example.com"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<p>mispql only searches: nothing is ever written to MISP. A condition can only narrow what
+your user is allowed to see, never widen it.</p>
+
+<h2 id="setup">Setting up</h2>
+<h3 id="requirements">Requirements</h3>
+<ul>
+  <li>A MISP 3.0 server.</li>
+  <li>A role with the <strong>Complex query</strong> permission, or a site administrator. It is
+  off for every role until an administrator turns it on. It is needed for every statement with a
+  <code>WHERE</code>, for <code>DESCRIBE</code> and <code>SHOW TABLES</code>, and for any search
+  on the tables other than attributes, events, objects and galaxy clusters. Without it MISP
+  answers 403.</li>
+  <li>Python 3.11 or later on the machine running mispql.</li>
+</ul>
+
+<h3 id="install">Install</h3>
+<p>From a checkout of the mispql repository:</p>
+</section>
+
+<pre class="shell"><code>python3 -m venv .venv
+.venv/bin/pip install .</code></pre>
+
+<section class="prose">
+<h3 id="config">Configuration</h3>
+<p>mispql reads the first config file it finds: the one given with <code>--config</code>, else
+<code>$MISPQL_CONFIG</code>, else <code>config.toml</code> next to the package, else
+<code>~/.config/mispql/config.toml</code>. Each profile is a TOML table; <code>[default]</code>
+is used unless <code>--profile</code> names another.</p>
+</section>
+
+<pre class="config"><code>[default]
+url = "https://misp.example.org"
+key = "..."            # chmod 600 the file
+verify_ssl = true      # or the path of a CA bundle
+timeout = 300          # seconds to wait for an answer
+
+[test]
+url = "https://misp-test.example.org"
+key = "..."</code></pre>
+
+<section class="prose">
+<p><code>MISPQL_URL</code> and <code>MISPQL_KEY</code> override the file, and
+<code>--key-file PATH</code> reads the key from a file of its own. The key is never a
+command-line argument, where other users of the machine could see it. Without a key, mispql
+asks for one when it runs at a terminal. A config file holding a key that others can read
+gets a warning.</p>
+
+<h2 id="running">Running mispql</h2>
+</section>
+
+<pre class="shell"><code>mispql                                # the interactive prompt, at a terminal
+mispql -e "SELECT ...; SELECT ...;"   # statements on the command line
+mispql script.mql                     # statements from a file
+mispql &lt; script.mql                   # or from stdin</code></pre>
+
+<section class="prose">
+<p>Every statement of a script is checked before the first one is sent, and the script stops
+at the first statement that fails. Results go to stdout; errors and warnings to stderr.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>-- this week's events: how many, then the newest ten
+SELECT COUNT(*) FROM events WHERE date &gt;= '7d';
+SELECT id, date, info FROM events WHERE date &gt;= '7d' ORDER BY event_id DESC LIMIT 10 FORMAT table;</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "limit": 1,
+  "page": 1,
+  "metadata": 1,
+  "query": {
+    "date": {
+      "&gt;=": "7d"
+    }
+  }
+}
+POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 10,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "date": {
+      "&gt;=": "7d"
+    }
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="prompt">The prompt</h3>
+<p>Enter runs the input once it ends with <code>;</code>; Alt-Enter runs it as it is. Tab
+completes keywords, table names and, after <code>FROM</code>, the fields of that table. Type
+<code>help</code> for a syntax summary; Ctrl-C clears the input or stops a running query;
+<code>quit</code> or Ctrl-D leaves. History is kept in
+<code>~/.local/state/mispql/history</code> (or under <code>$XDG_STATE_HOME</code>), readable
+by you alone.</p>
+
+<h3 id="options">Options</h3>
+<div class="scroll"><table>
+  <tr><th>Option</th><th></th></tr>
+  <tr><td><code>-e TEXT</code></td><td>run these statements</td></tr>
+  <tr><td><code>--config PATH</code></td><td>the config file to use</td></tr>
+  <tr><td><code>--profile NAME</code></td><td>the profile (TOML table) of the config file</td></tr>
+  <tr><td><code>--key-file PATH</code></td><td>read the API key from this file</td></tr>
+  <tr><td><code>-v</code>, <code>--verbose</code></td><td>print each request to stderr as it is sent</td></tr>
+  <tr><td><code>--dry-run</code></td><td>print the requests the statements compile to and send nothing; needs no server and no key</td></tr>
+</table></div>
+
+<h3 id="exit-codes">Exit codes</h3>
+<div class="scroll"><table>
+  <tr><th>Code</th><th>Meaning</th></tr>
+  <tr><td>0</td><td>every statement ran</td></tr>
+  <tr><td>1</td><td>a statement failed</td></tr>
+  <tr><td>2</td><td>a usage, input or configuration error</td></tr>
+  <tr><td>130</td><td>interrupted</td></tr>
+  <tr><td>141</td><td>stdout was closed early, as by <code>| head</code></td></tr>
+</table></div>
+
+<h2 id="statements">Statements</h2>
+</section>
+
+<pre class="syntax"><code>SELECT * | COUNT(*) | column, ... FROM table
+  [WHERE condition]
+  [ORDER BY field [ASC | DESC], ...]
+  [LIMIT n [OFFSET n]]
+  [FORMAT word];
+DESCRIBE table;
+SHOW TABLES;</code></pre>
+
+<section class="prose">
+<ul>
+  <li>Keywords can be written in any case. Table and field names are case-insensitive.</li>
+  <li>A name in backticks is taken as written: for a keyword used as a name
+  (<code>`count`</code>), for a name with characters other than letters, digits and
+  <code>_</code>, or to keep its case.</li>
+  <li>Strings take single or double quotes; a doubled quote inside stands for one
+  (<code>'O''Brien'</code>). Numbers are whole numbers, negative ones too; a word starting
+  with a digit, such as <code>'7d'</code>, needs quotes. <code>TRUE</code> and
+  <code>FALSE</code> are booleans.</li>
+  <li><code>--</code> starts a comment that runs to the end of the line.</li>
+  <li>Statements are separated by <code>;</code>. The last one needs none.</li>
+  <li>A search needs a <code>WHERE</code> or a <code>LIMIT</code>: MISP takes no search without
+  either.</li>
+</ul>
+
+<h2 id="conditions">Conditions</h2>
+<div class="scroll"><table>
+  <tr><th>Condition</th><th>Meaning</th></tr>
+  <tr><td><code>field = value</code>, <code>field != value</code></td><td>equals, does not equal (<code>&lt;&gt;</code> is the same as <code>!=</code>)</td></tr>
+  <tr><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers, timestamps, dates and datetimes only</td></tr>
+  <tr><td><code>field IN (v, ...)</code>, <code>NOT IN</code></td><td>one of the values, none of them</td></tr>
+  <tr><td><code>field LIKE 'pattern'</code>, <code>NOT LIKE</code></td><td>text fields only; see <a href="#like">patterns</a></td></tr>
+  <tr><td><code>AND</code>, <code>OR</code>, <code>NOT</code>, <code>( )</code></td><td>combine conditions</td></tr>
+</table></div>
+<p><code>NOT</code> binds tighter than <code>AND</code>, and <code>AND</code> tighter than
+<code>OR</code>; parentheses group.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes
+WHERE category = 'Network activity' AND (type = 'domain' OR type IN ('ip-src', 'ip-dst'))
+  AND id &gt; 50000
+LIMIT 100</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 100,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "category": "Network activity"
+      },
+      {
+        "OR": [
+          {
+            "type": "domain"
+          },
+          {
+            "type": {
+              "IN": [
+                "ip-src",
+                "ip-dst"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": {
+          "&gt;": 50000
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes
+WHERE event_id = 4711 AND NOT (to_ids = TRUE OR comment LIKE '%false positive%')
+LIMIT 100</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 100,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "event_id": 4711
+      },
+      {
+        "NOT": {
+          "OR": [
+            {
+              "to_ids": true
+            },
+            {
+              "comment": {
+                "LIKE": "%false positive%"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="types">Values and types</h3>
+<p>Types are strict, nothing is converted: text fields take strings, numeric fields numbers
+(<code>id = '50000'</code> is an error), booleans <code>TRUE</code> or <code>FALSE</code>.</p>
+<ul>
+  <li><strong>Timestamps</strong> (<code>timestamp</code>, <code>event_timestamp</code>,
+  <code>publish_timestamp</code>, …) take a Unix time or a relative time: digits and one of
+  <code>d</code>, <code>h</code>, <code>m</code>, <code>s</code>, so <code>'7d'</code> is
+  seven days ago.</li>
+  <li><strong>Dates</strong> (<code>date</code>, the event date) take <code>'YYYY-MM-DD'</code>
+  or a number of days (<code>'30d'</code>).</li>
+  <li><strong>Datetimes</strong> (<code>created</code> and <code>modified</code> on analyst
+  data and collections, <code>date_created</code> and <code>date_modified</code> on
+  organisations) take what timestamps take, or <code>'YYYY-MM-DD'</code> and
+  <code>'YYYY-MM-DD HH:MM:SS'</code>.</li>
+</ul>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM events WHERE date &gt;= '2026-01-01' AND publish_timestamp &gt;= '12h' LIMIT 50</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "date": {
+          "&gt;=": "2026-01-01"
+        }
+      },
+      {
+        "publish_timestamp": {
+          "&gt;=": "12h"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="like">Patterns</h3>
+<p><code>LIKE</code> takes a <code>%</code> at the start, the end or both
+(<code>'%evil'</code>, <code>'evil%'</code>, <code>'%evil%'</code>), and nowhere else.
+<code>=</code> and <code>IN</code> compare literally: a value starting or ending with
+<code>%</code> is refused there.</p>
+<p><code>tags</code> is the exception, as in MISP's classic tag filter: its value is always
+matched against tag names as a pattern, <code>_</code> standing for any one character and a
+<code>%</code> inside the value for any run of them, and a value of digits only is a tag
+id.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes
+WHERE tags LIKE 'tlp:%' AND tags NOT IN ('tlp:red', 'tlp:amber+strict') AND timestamp &gt;= '1d'
+LIMIT 100</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 100,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "tags": {
+          "LIKE": "tlp:%"
+        }
+      },
+      {
+        "tags": {
+          "NOT IN": [
+            "tlp:red",
+            "tlp:amber+strict"
+          ]
+        }
+      },
+      {
+        "timestamp": {
+          "&gt;=": "1d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="null">Empty fields</h3>
+<p>Some fields can be empty (NULL), such as an attribute's <code>comment</code> or an
+object's <code>object_name</code>. <code>!=</code>, <code>NOT IN</code>, <code>NOT LIKE</code>
+and <code>NOT</code> also match rows where the field is empty: <code>comment NOT LIKE
+'%test%'</code> includes the attributes without a comment.</p>
+
+<h2 id="columns">Columns</h2>
+<p><code>SELECT *</code> prints whole rows. A column list prints only those columns, in that
+order:</p>
+<ul>
+  <li>Nested values are reached with dots: <code>Event.info</code>,
+  <code>Event.Orgc.name</code>.</li>
+  <li>The names conditions use work as columns too, where the row holds the value:
+  <code>eventinfo</code> prints the event's <code>info</code>, <code>org</code> the creator
+  organisation's name. Each table's list is in <a href="#tables">Tables</a>. The column is
+  headed by the row's own name.</li>
+  <li><code>Tag</code> is one cell: the tag names joined by commas.</li>
+  <li>Columns match the row's keys in any case. A column no row has gets a warning on stderr,
+  and no value.</li>
+</ul>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, type, value, Event.info, Event.Orgc.name, Tag FROM attributes
+WHERE type = 'btc' LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "query": {
+    "type": "btc"
+  }
+}</code></pre>
+</div>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, eventinfo, org, tags FROM events
+WHERE org = 'CIRCL' AND date &gt;= '30d' LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 20,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "org": "CIRCL"
+      },
+      {
+        "date": {
+          "&gt;=": "30d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<p>Without a <code>FORMAT</code>, a column list prints JSON objects keyed by the column
+names:</p>
+</section>
+
+<div class="example" data-sample="events-columns">
+<pre class="mql"><code>SELECT id, eventinfo, org FROM events
+WHERE tags = 'tlp:clear' AND date &gt;= '7d' ORDER BY event_id DESC LIMIT 2</code></pre>
+<pre class="output"><code>[
+  {
+    "id": "4720",
+    "info": "Credential phishing against webmail users",
+    "Orgc.name": "CIRCL"
+  },
+  {
+    "id": "4718",
+    "info": "Loader infrastructure seen in honeypot logs",
+    "Orgc.name": "ORG-B"
+  }
+]</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 2,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "tags": "tlp:clear"
+      },
+      {
+        "date": {
+          "&gt;=": "7d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<p>A keyword used as a column name goes in backticks, as the tag column <code>count</code>
+does:</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, name, `count`, attribute_count FROM tags
+WHERE is_galaxy = FALSE ORDER BY name LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /tags/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "name asc"
+  ],
+  "query": {
+    "is_galaxy": false
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h2 id="sorting">Sorting and paging</h2>
+<p><code>ORDER BY</code> takes one or more fields, each <code>ASC</code> (the default) or
+<code>DESC</code>. Each table sorts by a fixed set of fields, listed in
+<a href="#tables">Tables</a>; objects cannot be sorted. mispql checks the names itself,
+because MISP silently ignores a sort field it does not know when there is no
+<code>WHERE</code>.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM events WHERE published = TRUE
+ORDER BY publish_timestamp DESC, event_id LIMIT 25 FORMAT table</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 25,
+  "page": 1,
+  "order": [
+    "publish_timestamp desc",
+    "id asc"
+  ],
+  "query": {
+    "published": true
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<p><code>LIMIT n</code> asks for <code>n</code> rows and <code>OFFSET</code> skips rows
+before them; MISP pages by <code>limit</code> and <code>page</code>. An offset that is a
+multiple of the limit is one page. Any other offset fetches the page it starts in and, when
+that page is full, the next one, and keeps the rows asked for. With one of MISP's own
+formats, which mispql prints untouched, the offset must be a multiple of the limit.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes WHERE type = 'url' ORDER BY id LIMIT 10 OFFSET 15 FORMAT flat</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 10,
+  "page": 2,
+  "order": [
+    "id asc"
+  ],
+  "query": {
+    "type": "url"
+  }
+}
+POST /attributes/restSearch (sent only when the first page is full)
+{
+  "returnFormat": "json",
+  "limit": 10,
+  "page": 3,
+  "order": [
+    "id asc"
+  ],
+  "query": {
+    "type": "url"
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h2 id="formats">Output formats</h2>
+<p>Without a <code>FORMAT</code>, <code>SELECT *</code> prints the rows as a JSON array,
+exactly as MISP sends them, and a column list prints JSON objects with those columns.
+<code>FORMAT table</code> and <code>FORMAT flat</code> are rendered by mispql; any other
+word is one of MISP's own export formats.</p>
+
+<h3 id="flattening">Flattening</h3>
+<p>For a column list, <code>FORMAT table</code> and <code>FORMAT flat</code>, rows are
+flattened: nested objects become dotted names (<code>Event.Orgc.name</code>), <code>Tag</code>
+becomes one cell of names, and every other list (an event's attributes and objects, an
+object's attributes, galaxies, …) is left out. Those stay in the JSON of <code>SELECT *</code>
+and in MISP's own formats.</p>
+
+<h3 id="format-table">FORMAT table</h3>
+<p>A text table. Without a column list it shows each table's default columns, listed in
+<a href="#tables">Tables</a>. Cells are cut at 60 characters, and line breaks in a value are
+shown as <code>\n</code>.</p>
+</section>
+
+<div class="example" data-sample="events-table">
+<pre class="mql"><code>SELECT * FROM events
+WHERE tags = 'tlp:clear' AND date &gt;= '7d' ORDER BY event_id DESC LIMIT 3 FORMAT table</code></pre>
+<pre class="output"><code>+------+------------+-------------------------------------------------+-----------+-----------------+----------+-----------+-----------------+-------------------------------------+
+| id   | date       | info                                            | Orgc.name | threat_level_id | analysis | published | attribute_count | Tag                                 |
++------+------------+-------------------------------------------------+-----------+-----------------+----------+-----------+-----------------+-------------------------------------+
+| 4720 | 2026-11-14 | Credential phishing against webmail users       | CIRCL     | 2               | 1        | true      | 37              | tlp:clear                           |
+| 4718 | 2026-11-13 | Loader infrastructure seen in honeypot logs     | ORG-B     | 3               | 2        | true      | 1204            | tlp:clear                           |
+| 4711 | 2026-11-12 | Command and control domains of a banking trojan | CIRCL     | 1               | 2        | true      | 58              | tlp:clear,misp-galaxy:banker="Zeus" |
++------+------------+-------------------------------------------------+-----------+-----------------+----------+-----------+-----------------+-------------------------------------+
+3 rows</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 3,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "tags": "tlp:clear"
+      },
+      {
+        "date": {
+          "&gt;=": "7d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="format-flat">FORMAT flat</h3>
+<p>CSV with a header row: the column list, or with <code>*</code> every name the rows have,
+in the order first seen. Values are written as they are, so a value starting with
+<code>=</code> can act as a formula when the file is opened in a spreadsheet; MISP's own
+<code>FORMAT xlsx</code> is the safer choice there.</p>
+</section>
+
+<div class="example" data-sample="events-flat">
+<pre class="mql"><code>SELECT id, date, info, Orgc.name, Tag FROM events
+WHERE tags = 'tlp:clear' AND date &gt;= '7d' ORDER BY event_id DESC LIMIT 3 FORMAT flat</code></pre>
+<pre class="output"><code>id,date,info,Orgc.name,Tag
+4720,2026-11-14,Credential phishing against webmail users,CIRCL,tlp:clear
+4718,2026-11-13,Loader infrastructure seen in honeypot logs,ORG-B,tlp:clear
+4711,2026-11-12,Command and control domains of a banking trojan,CIRCL,"tlp:clear,misp-galaxy:banker=""Zeus"""</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 3,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "tags": "tlp:clear"
+      },
+      {
+        "date": {
+          "&gt;=": "7d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="misp-formats">MISP's formats</h3>
+<p>Any other word is passed to MISP as the <code>returnFormat</code>, and the answer is
+printed byte for byte: <code>csv</code>, <code>text</code>, <code>xlsx</code>,
+<code>stix2</code>, <code>suricata</code>, … Each table takes the formats its endpoint
+knows; MISP refuses the others. A column list needs <code>FORMAT table</code>,
+<code>FORMAT flat</code> or no format.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM attributes
+WHERE type IN ('ip-src', 'ip-dst') AND to_ids = TRUE AND timestamp &gt;= '30d'
+LIMIT 1000 FORMAT csv</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "csv",
+  "limit": 1000,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "type": {
+          "IN": [
+            "ip-src",
+            "ip-dst"
+          ]
+        }
+      },
+      {
+        "to_ids": true
+      },
+      {
+        "timestamp": {
+          "&gt;=": "30d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<pre class="shell"><code>mispql -e "SELECT * FROM events WHERE date &gt;= '30d' LIMIT 100 FORMAT xlsx" &gt; events.xlsx</code></pre>
+
+<section class="prose">
+<h2 id="counting">Counting</h2>
+<p><code>SELECT COUNT(*)</code> prints the number of rows that meet the conditions, counted
+by the server; no rows are fetched. It needs a <code>WHERE</code> and takes no
+<code>ORDER BY</code>, <code>LIMIT</code>, <code>OFFSET</code> or <code>FORMAT</code>.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT COUNT(*) FROM attributes WHERE type = 'domain' AND timestamp &gt;= '30d'</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "count",
+  "query": {
+    "AND": [
+      {
+        "type": "domain"
+      },
+      {
+        "timestamp": {
+          "&gt;=": "30d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<p>Events are counted differently: mispql asks for one event, without its attributes, and
+reads the total from the <code>X-Result-Count</code> header.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT COUNT(*) FROM events WHERE tags = 'tlp:clear' AND published = TRUE</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "limit": 1,
+  "page": 1,
+  "metadata": 1,
+  "query": {
+    "AND": [
+      {
+        "tags": "tlp:clear"
+      },
+      {
+        "published": true
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h2 id="tables">Tables</h2>
+<p>Each table is one kind of MISP record. What a table can be searched by is listed by
+<code>DESCRIBE</code> (see <a href="#discovery">Fields and discovery</a>); this section gives
+what each one returns and how it behaves.</p>
+
+<h3 id="table-attributes">attributes</h3>
+<p>Attributes, each with its event (<code>Event</code>, with the creator organisation under
+<code>Event.Orgc</code>) and its tags. Event fields (<code>eventinfo</code>,
+<code>org</code>, <code>published</code>, <code>event_timestamp</code>, …) are conditions on
+the attribute's event. <code>tags</code> matches a tag on the attribute or on its event;
+negated, neither carries it.</p>
+<dl class="facts" data-table="attributes">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /attributes/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>event_id</code>, <code>category</code>, <code>type</code>, <code>value</code>, <code>to_ids</code>, <code>timestamp</code>, <code>Tag</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>event_id</code>, <code>object_id</code>, <code>type</code>, <code>category</code>, <code>value</code>, <code>distribution</code>, <code>timestamp</code>, <code>object_relation</code>, <code>publish_timestamp</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>eventinfo</code> → <code>Event.info</code>, <code>org</code> → <code>Event.Orgc.name</code>, <code>tags</code> → <code>Tag</code>, <code>event_timestamp</code> → <code>Event.timestamp</code>, <code>publish_timestamp</code> → <code>Event.publish_timestamp</code>, <code>threat_level_id</code> → <code>Event.threat_level_id</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, value, Event.info FROM attributes
+WHERE eventinfo LIKE '%phishing%' AND type IN ('url', 'domain') AND to_ids = TRUE
+LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "eventinfo": {
+          "LIKE": "%phishing%"
+        }
+      },
+      {
+        "type": {
+          "IN": [
+            "url",
+            "domain"
+          ]
+        }
+      },
+      {
+        "to_ids": true
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-events">events</h3>
+<p>Events. Event fields are conditions on the event itself. Attribute fields
+(<code>type</code>, <code>value</code>, <code>category</code>, …) and object fields
+(<code>object_name</code>, <code>object_template_uuid</code>) select an event holding at
+least one matching attribute or object that you can see; they cannot be negated, so "events
+without a <code>btc</code> attribute" cannot be asked.</p>
+<p><code>tags</code> selects an event carrying the tag, or holding an attribute that does.
+Negated (<code>!=</code>, <code>NOT IN</code>, <code>NOT LIKE</code>), it leaves out the
+events tagged with it and removes the matching attributes and event reports from the events
+returned; it is allowed only where every enclosing condition is an <code>AND</code>.</p>
+<dl class="facts" data-table="events">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /events/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>date</code>, <code>info</code>, <code>Orgc.name</code>, <code>threat_level_id</code>, <code>analysis</code>, <code>published</code>, <code>attribute_count</code>, <code>Tag</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>event_id</code>, <code>eventinfo</code>, <code>analysis</code>, <code>threat_level_id</code>, <code>distribution</code>, <code>timestamp</code>, <code>event_timestamp</code>, <code>publish_timestamp</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>event_id</code> → <code>id</code>, <code>eventinfo</code> → <code>info</code>, <code>org</code> → <code>Orgc.name</code>, <code>event_timestamp</code> → <code>timestamp</code>, <code>tags</code> → <code>Tag</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, info, Orgc.name, attribute_count FROM events
+WHERE value = '198.51.100.23' AND published = TRUE
+ORDER BY event_id DESC LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "metadata": 1,
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "value": "198.51.100.23"
+      },
+      {
+        "published": true
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-objects">objects</h3>
+<p>Objects, each with the attributes of it you can see. Object and event fields can be
+negated freely; attribute fields select an object holding a matching attribute and cannot be
+negated, and <code>tags</code> works as on events. Objects cannot be sorted.</p>
+<dl class="facts" data-table="objects">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /objects/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>event_id</code>, <code>name</code>, <code>meta-category</code>, <code>comment</code>, <code>timestamp</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable">none</dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>object_id</code> → <code>id</code>, <code>object_name</code> → <code>name</code>, <code>object_template_uuid</code> → <code>template_uuid</code>, <code>orgc_id</code> → <code>Event.orgc_id</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, event_id, name, comment FROM objects
+WHERE object_name IN ('domain-ip', 'url') AND event_timestamp &gt;= '7d'
+  AND value LIKE '%.example.com'
+LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /objects/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "object_name": {
+          "IN": [
+            "domain-ip",
+            "url"
+          ]
+        }
+      },
+      {
+        "event_timestamp": {
+          "&gt;=": "7d"
+        }
+      },
+      {
+        "value": {
+          "LIKE": "%.example.com"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-galaxy_clusters">galaxy_clusters</h3>
+<p>Galaxy clusters, with their galaxy. Text fields compare without regard to case.
+<code>galaxy_name</code>, <code>galaxy_namespace</code> and <code>galaxy_uuid</code> are
+conditions on the cluster's galaxy; <code>org</code> is the creator organisation, by name or
+uuid, and <code>'MISP'</code> selects the clusters the MISP project maintains.</p>
+<p><code>meta.&lt;key&gt;</code> matches the cluster's own meta values under that key, such
+as <code>meta.synonyms</code> or <code>meta.country</code>. A key with characters other
+than letters, digits and <code>_</code> goes in backticks. A negated condition selects the
+clusters with no such value, including those without the key.</p>
+<dl class="facts" data-table="galaxy_clusters">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /galaxy_clusters/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>value</code>, <code>Galaxy.name</code>, <code>Orgc.name</code>, <code>distribution</code>, <code>default</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>version</code>, <code>type</code>, <code>value</code>, <code>distribution</code>, <code>orgc_id</code>, <code>org_id</code>, <code>tag_name</code>, <code>galaxy_id</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>org</code> → <code>Orgc.name</code>, <code>galaxy_uuid</code> → <code>Galaxy.uuid</code>, <code>galaxy_name</code> → <code>Galaxy.name</code>, <code>galaxy_namespace</code> → <code>Galaxy.namespace</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, value, Galaxy.name FROM galaxy_clusters
+WHERE org = 'MISP' AND meta.`cfr-suspected-victims` LIKE '%Ukraine%'
+ORDER BY value LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /galaxy_clusters/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "order": [
+    "value asc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "org": "MISP"
+      },
+      {
+        "meta.cfr-suspected-victims": {
+          "LIKE": "%Ukraine%"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<div class="example">
+<pre class="mql"><code>SELECT COUNT(*) FROM galaxy_clusters
+WHERE galaxy_namespace = 'mitre-attack' AND description LIKE '%credential%'</code></pre>
+<pre class="request"><code>POST /galaxy_clusters/restSearch
+{
+  "returnFormat": "count",
+  "query": {
+    "AND": [
+      {
+        "galaxy_namespace": "mitre-attack"
+      },
+      {
+        "description": {
+          "LIKE": "%credential%"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-event_reports">event_reports</h3>
+<p>Event reports, searched as children of their event: event fields use the same names as
+on the other tables. <code>tags</code> matches a tag on the report or on its event. Deleted
+reports are left out unless the conditions name <code>deleted</code>. A condition on
+<code>content</code> reads the Markdown of every report you can see.</p>
+<dl class="facts" data-table="event_reports">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /event_reports/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>event_id</code>, <code>name</code>, <code>Event.info</code>, <code>distribution</code>, <code>timestamp</code>, <code>Tag</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>event_id</code>, <code>name</code>, <code>timestamp</code>, <code>distribution</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>eventinfo</code> → <code>Event.info</code>, <code>org</code> → <code>Event.Orgc.name</code>, <code>org_id</code> → <code>Event.org_id</code>, <code>orgc_id</code> → <code>Event.orgc_id</code>, <code>date</code> → <code>Event.date</code>, <code>tags</code> → <code>Tag</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM event_reports
+WHERE tags = 'tlp:clear' AND published = TRUE AND date &gt;= '30d'
+ORDER BY timestamp DESC LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /event_reports/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "timestamp desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "tags": "tlp:clear"
+      },
+      {
+        "published": true
+      },
+      {
+        "date": {
+          "&gt;=": "30d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-notes">notes, opinions, relationships</h3>
+<p>Analyst data, one table per type. You see the records your organisation holds and those
+shared with you. The record they are attached to is matched by its address only
+(<code>object_type</code>, <code>object_uuid</code>, <code>object_sha256</code>), whether or
+not you can see it. <code>created</code> and <code>modified</code> are datetimes in UTC.</p>
+<h4>notes</h4>
+<dl class="facts" data-table="notes">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /analyst_data/restSearch/Note</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>object_type</code>, <code>object_uuid</code>, <code>note</code>, <code>authors</code>, <code>created</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>created</code>, <code>modified</code>, <code>distribution</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>org</code> → <code>Orgc.name</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM notes WHERE object_type = 'Event' AND note LIKE '%ransomware%'
+ORDER BY created DESC LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /analyst_data/restSearch/Note
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "created desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "object_type": "Event"
+      },
+      {
+        "note": {
+          "LIKE": "%ransomware%"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<h4 id="table-opinions" class="prose">opinions</h4>
+<dl class="facts" data-table="opinions">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /analyst_data/restSearch/Opinion</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>object_type</code>, <code>object_uuid</code>, <code>opinion</code>, <code>comment</code>, <code>authors</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>created</code>, <code>modified</code>, <code>distribution</code>, <code>opinion</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>org</code> → <code>Orgc.name</code></dd>
+</dl>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM opinions WHERE opinion &lt; 50 AND created &gt;= '2026-11-01'
+ORDER BY opinion LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /analyst_data/restSearch/Opinion
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "opinion asc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "opinion": {
+          "&lt;": 50
+        }
+      },
+      {
+        "created": {
+          "&gt;=": "2026-11-01"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<h4 id="table-relationships" class="prose">relationships</h4>
+<dl class="facts" data-table="relationships">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /analyst_data/restSearch/Relationship</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>object_type</code>, <code>object_uuid</code>, <code>relationship_type</code>, <code>related_object_type</code>, <code>related_object_uuid</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>created</code>, <code>modified</code>, <code>distribution</code>, <code>relationship_type</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>org</code> → <code>Orgc.name</code></dd>
+</dl>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM relationships
+WHERE relationship_type = 'attributed-to' AND related_object_type = 'GalaxyCluster'
+LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /analyst_data/restSearch/Relationship
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "relationship_type": "attributed-to"
+      },
+      {
+        "related_object_type": "GalaxyCluster"
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-collections">collections</h3>
+<p>Collections, each with its elements. An element field (<code>element_type</code>,
+<code>element_uuid</code>, <code>element_sha256</code>, <code>element_description</code>)
+matches when any element of the collection does; negated, it selects the collections with
+no such element, the empty ones included. Elements are matched by their address and
+description, whether or not you can see what they point at. <code>name</code>,
+<code>type</code> and the descriptions compare without regard to case.</p>
+<dl class="facts" data-table="collections">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /collections/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>name</code>, <code>type</code>, <code>Orgc.name</code>, <code>distribution</code>, <code>element_count</code>, <code>modified</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>name</code>, <code>type</code>, <code>created</code>, <code>modified</code>, <code>distribution</code></dd>
+  <dt>Field names as columns</dt><dd data-fact="aliases"><code>org</code> → <code>Orgc.name</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM collections WHERE type = 'campaign' AND element_type = 'Event'
+ORDER BY modified DESC LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /collections/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "modified desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "type": "campaign"
+      },
+      {
+        "element_type": "Event"
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<div class="example">
+<pre class="mql"><code>-- collections with no elements at all
+SELECT id, name FROM collections
+WHERE element_type NOT IN ('Event', 'GalaxyCluster', 'Attribute', 'Object', 'AttributeValue')
+LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /collections/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "query": {
+    "element_type": {
+      "NOT IN": [
+        "Event",
+        "GalaxyCluster",
+        "Attribute",
+        "Object",
+        "AttributeValue"
+      ]
+    }
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-tags">tags</h3>
+<p>Every tag on the instance, as MISP's tag index shows them, with how many events you can
+see carry each one (<code>count</code>) and how many attributes do
+(<code>attribute_count</code>); those counts cannot be searched or sorted on.
+<code>name</code> compares without regard to case. <code>numerical_value</code> searches the
+tag's own value, even where your settings override it.</p>
+<dl class="facts" data-table="tags">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /tags/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>name</code>, <code>numerical_value</code>, <code>hide_tag</code>, <code>is_galaxy</code>, <code>count</code>, <code>attribute_count</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>name</code>, <code>numerical_value</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM tags
+WHERE is_galaxy = TRUE AND hide_tag = FALSE AND name LIKE 'misp-galaxy:mitre-attack-pattern=%'
+ORDER BY name LIMIT 20 FORMAT table</code></pre>
+<pre class="request"><code>POST /tags/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "name asc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "is_galaxy": true
+      },
+      {
+        "hide_tag": false
+      },
+      {
+        "name": {
+          "LIKE": "misp-galaxy:mitre-attack-pattern=%"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h3 id="table-organisations">organisations</h3>
+<p>Every organisation, local and external, as MISP's organisation index shows them, with
+its number of users. Text fields compare without regard to case. When the instance hides the
+organisation index from your role, this table answers 403 as the index does.</p>
+<dl class="facts" data-table="organisations">
+  <dt>Endpoint</dt><dd data-fact="endpoint"><code>POST /organisations/restSearch</code></dd>
+  <dt>Default columns</dt><dd data-fact="columns"><code>id</code>, <code>name</code>, <code>type</code>, <code>nationality</code>, <code>sector</code>, <code>local</code>, <code>user_count</code></dd>
+  <dt>ORDER BY</dt><dd data-fact="sortable"><code>id</code>, <code>name</code>, <code>date_created</code>, <code>date_modified</code></dd>
+</dl>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM organisations WHERE name LIKE '%cert%' ORDER BY name LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /organisations/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "order": [
+    "name asc"
+  ],
+  "query": {
+    "name": {
+      "LIKE": "%cert%"
+    }
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+<h2 id="discovery">Fields and discovery</h2>
+<p><code>SHOW TABLES</code> lists the tables you may query. <code>DESCRIBE</code> (or
+<code>DESC</code>) asks the server for a table's fields, with each one's type, operators and
+level (what it is matched against: the record itself, its event, its attributes, …), the
+names <code>ORDER BY</code> takes, and the limits in effect. The prompt completes field names
+from the same answer.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>DESCRIBE events</code></pre>
+<pre class="request"><code>GET /events/queryDescribe</code></pre>
+</div>
+
+<div class="example">
+<pre class="mql"><code>SHOW TABLES</code></pre>
+<pre class="request"><code>GET /attributes/queryDescribe
+GET /events/queryDescribe
+GET /objects/queryDescribe
+GET /galaxy_clusters/queryDescribe
+GET /event_reports/queryDescribe
+GET /analyst_data/queryDescribe/Note
+GET /analyst_data/queryDescribe/Opinion
+GET /analyst_data/queryDescribe/Relationship
+GET /collections/queryDescribe
+GET /tags/queryDescribe
+GET /organisations/queryDescribe</code></pre>
+</div>
+
+<section class="prose">
+<p>The full field reference, with each field's meaning, is in MISP's own documentation,
+<code>docs/restsearch-complex-query.md</code> in the MISP repository.</p>
+
+<h2 id="errors">Errors</h2>
+<p>mispql checks a statement before sending it, and points at the text an error is
+about:</p>
+</section>
+
+<div class="example" data-error="local">
+<pre class="mql"><code>SELECT * FROM attributes WHERE type = domain LIMIT 10</code></pre>
+<pre class="error"><code>ERROR 1:39: expected a value ('string', number, TRUE or FALSE), found domain (strings need quotes)
+SELECT * FROM attributes WHERE type = domain LIMIT 10
+                                      ^^^^^^</code></pre>
+</div>
+
+<section class="prose">
+<p>What only the server can check (field names, operators per field, types) comes back from
+MISP as an error per condition, which mispql places on the statement the same way:</p>
+</section>
+
+<div class="example" data-capture="event_negation">
+<pre class="mql"><code>SELECT * FROM events WHERE event_id &gt; 0 AND (eventinfo = 'x' OR type != 'btc') LIMIT 1</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "limit": 1,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "event_id": {
+          "&gt;": 0
+        }
+      },
+      {
+        "OR": [
+          {
+            "eventinfo": "x"
+          },
+          {
+            "type": {
+              "!=": "btc"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+<pre class="error"><code>ERROR 1:65: attribute and object fields cannot be negated when searching events
+SELECT * FROM events WHERE event_id &gt; 0 AND (eventinfo = 'x' OR type != 'btc') LIMIT 1
+                                                                ^^^^^^^^^^^^^</code></pre>
+</div>
+
+<section class="prose">
+<h2 id="limits">Limits</h2>
+<p>The server limits how large a set of conditions may be, before it touches the database.
+These are the defaults; an administrator can change them, and <code>DESCRIBE</code> shows
+the ones in effect.</p>
+<div class="scroll"><table>
+  <tr><th>Limit</th><th>Default</th><th>Of</th></tr>
+  <tr><td><code>max_depth</code></td><td>5</td><td>nesting of <code>AND</code>, <code>OR</code> and <code>NOT</code></td></tr>
+  <tr><td><code>max_nodes</code></td><td>50</td><td>conditions plus the <code>AND</code>, <code>OR</code> and <code>NOT</code> joining them</td></tr>
+  <tr><td><code>max_list</code></td><td>100</td><td>values in one <code>IN</code> or <code>NOT IN</code></td></tr>
+  <tr><td><code>max_value_length</code></td><td>1024</td><td>characters in one value</td></tr>
+</table></div>
+
+<h2 id="large">Large events</h2>
+<p>An event can hold a million attributes. For a column list, <code>FORMAT table</code> and
+<code>FORMAT flat</code> on events, mispql asks MISP for the events without their attributes,
+objects and reports, which flattening would leave out anyway, so a large event costs no more
+than a small one. <code>SELECT *</code> printed as JSON and MISP's own formats fetch whole
+events: keep a <code>LIMIT</code> on those.</p>
+<p>Conditions are cheapest when one of them is selective. An <code>OR</code> whose branches
+share no index, a negated <code>tags</code>, or an attribute field matching a large share of
+the attributes, such as a common <code>category</code>, is best combined with an
+<code>AND</code> on <code>event_id</code>, a timestamp or another narrow condition.</p>
+</section>
+</article>
+</main>
+<footer>
+  mispql is free software under the MIT licence.
+  <a href="https://www.misp-project.org/">MISP</a> is an open source threat intelligence sharing platform.
+</footer>
+</body>
+</html>

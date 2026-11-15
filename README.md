@@ -69,6 +69,14 @@ python3 -m venv .venv
 
 Python 3.11 or later.
 
+## Website
+
+`site/` holds the product page and the guide: static files, no build step.
+`tests/test_site.py` checks that every example shows what `--dry-run` prints
+for it; after a change to what a statement compiles to,
+`MISPQL_UPDATE_SITE=1 .venv/bin/pytest tests/test_site.py` rewrites the shown
+requests (review the diff).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

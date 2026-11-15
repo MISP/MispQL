@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MispQL: query MISP in SQL</title>
+<meta name="description" content="mispql is a command-line client that queries MISP in MispQL, an SQL-like language, over MISP's REST API.">
+<link rel="stylesheet" href="style.css">
+<script src="copy.js" defer></script>
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="index.html">
+    <picture>
+      <source srcset="misp-logo-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="misp-logo.png" alt="MISP" width="123" height="36">
+    </picture>
+    <span>MispQL</span>
+  </a>
+  <nav><a href="index.html" aria-current="page">Overview</a><a href="guide.html">Guide</a></nav>
+</header>
+<main>
+<section class="hero">
+  <h1>Query MISP in SQL</h1>
+  <p class="lead">mispql is a command-line client for MISP. Write a question as an SQL-like
+  statement: it becomes one MISP REST API search, sent with your API key, and the answer
+  comes back as JSON, a text table or CSV.</p>
+</section>
+
+<div class="example" data-sample="attributes-table">
+<pre class="mql"><code>SELECT id, event_id, type, value, Tag FROM attributes
+WHERE type IN ('domain', 'ip-dst') AND timestamp &gt;= '7d' AND tags != 'tlp:red'
+LIMIT 5 FORMAT table</code></pre>
+<pre class="output"><code>+--------+----------+--------+--------------------------+------------------------------------------------+
+| id     | event_id | type   | value                    | Tag                                            |
++--------+----------+--------+--------------------------+------------------------------------------------+
+| 913204 | 4711     | domain | update-check.example.net | tlp:amber,kill-chain:Command and Control       |
+| 913205 | 4711     | ip-dst | 198.51.100.23            | tlp:amber                                      |
+| 913388 | 4718     | domain | cdn-sync.example.org     |                                                |
+| 913390 | 4718     | ip-dst | 203.0.113.7              | tlp:green                                      |
+| 913412 | 4720     | domain | login-portal.example.com | tlp:clear,phishing:techniques="spear-phishing" |
++--------+----------+--------+--------------------------+------------------------------------------------+
+5 rows</code></pre>
+<pre class="request"><code>POST /attributes/restSearch
+{
+  "returnFormat": "json",
+  "limit": 5,
+  "page": 1,
+  "query": {
+    "AND": [
+      {
+        "type": {
+          "IN": [
+            "domain",
+            "ip-dst"
+          ]
+        }
+      },
+      {
+        "timestamp": {
+          "&gt;=": "7d"
+        }
+      },
+      {
+        "tags": {
+          "!=": "tlp:red"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+  <h2 id="one-request">One statement, one request</h2>
+  <p>Every statement compiles to a single documented request to one of MISP's
+  <code>restSearch</code> endpoints, before anything is sent. The whole statement is checked
+  first, and a mistake is shown at the place in the text where it was made.
+  <code>--dry-run</code> prints the request instead of sending it, so a statement can be
+  turned into an API call for a script, a playbook or another tool.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT * FROM events
+WHERE date &gt;= '30d' AND (type = 'btc' OR object_name = 'bank-account') AND tags != 'tlp:red'
+ORDER BY event_id DESC LIMIT 20</code></pre>
+<pre class="request"><code>POST /events/restSearch
+{
+  "returnFormat": "json",
+  "limit": 20,
+  "page": 1,
+  "order": [
+    "id desc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "date": {
+          "&gt;=": "30d"
+        }
+      },
+      {
+        "OR": [
+          {
+            "type": "btc"
+          },
+          {
+            "object_name": "bank-account"
+          }
+        ]
+      },
+      {
+        "tags": {
+          "!=": "tlp:red"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+  <h2 id="features">What it does</h2>
+</section>
+<div class="grid">
+  <div class="card"><h3>Eleven tables</h3><p>Attributes, events, objects, galaxy clusters,
+  event reports, notes, opinions, relationships, collections, tags and organisations.</p></div>
+  <div class="card"><h3>Real conditions</h3><p><code>AND</code>, <code>OR</code>,
+  <code>NOT</code> and parentheses over <code>=</code>, <code>!=</code>, comparisons,
+  <code>IN</code> and <code>LIKE</code>, with relative times such as <code>'7d'</code>.</p></div>
+  <div class="card"><h3>Your choice of output</h3><p>JSON rows, a text table, CSV, or any of
+  MISP's own export formats exactly as MISP sends them.</p></div>
+  <div class="card"><h3>Counts</h3><p><code>COUNT(*)</code> answers with one number,
+  counted by the server.</p></div>
+  <div class="card"><h3>Discovery</h3><p><code>SHOW TABLES</code> and <code>DESCRIBE</code>
+  ask the server which tables and fields you can use.</p></div>
+  <div class="card"><h3>Interactive or scripted</h3><p>A prompt with completion and history,
+  or statements from the command line, a file or a pipe.</p></div>
+</div>
+
+<section class="prose">
+  <h2 id="access">Sees what you may see, and nothing else</h2>
+  <p>mispql only searches. Each request runs as the user whose API key it carries, and MISP
+  applies that user's access rules as on any other API call: a condition can narrow what the
+  user is allowed to see, never widen it. Nothing is written to MISP.</p>
+
+  <h2 id="more">More examples</h2>
+  <p>How many <code>domain-ip</code> objects arrived in events changed this week:</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>SELECT COUNT(*) FROM objects WHERE object_name = 'domain-ip' AND event_timestamp &gt;= '7d'</code></pre>
+<pre class="request"><code>POST /objects/restSearch
+{
+  "returnFormat": "count",
+  "query": {
+    "AND": [
+      {
+        "object_name": "domain-ip"
+      },
+      {
+        "event_timestamp": {
+          "&gt;=": "7d"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<p class="prose">Threat actors with a synonym containing "bear", from the galaxies MISP ships with:</p>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, value, Galaxy.name FROM galaxy_clusters
+WHERE galaxy_name = 'Threat Actor' AND org = 'MISP' AND meta.synonyms LIKE '%bear%'
+ORDER BY value LIMIT 50 FORMAT table</code></pre>
+<pre class="request"><code>POST /galaxy_clusters/restSearch
+{
+  "returnFormat": "json",
+  "limit": 50,
+  "page": 1,
+  "order": [
+    "value asc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "galaxy_name": "Threat Actor"
+      },
+      {
+        "org": "MISP"
+      },
+      {
+        "meta.synonyms": {
+          "LIKE": "%bear%"
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<p class="prose">External organisations of the financial sector, as CSV for a spreadsheet or a script:</p>
+
+<div class="example">
+<pre class="mql"><code>SELECT id, name, nationality, sector FROM organisations
+WHERE local = FALSE AND sector IN ('Financial', 'Banking')
+ORDER BY name LIMIT 100 FORMAT flat</code></pre>
+<pre class="request"><code>POST /organisations/restSearch
+{
+  "returnFormat": "json",
+  "limit": 100,
+  "page": 1,
+  "order": [
+    "name asc"
+  ],
+  "query": {
+    "AND": [
+      {
+        "local": false
+      },
+      {
+        "sector": {
+          "IN": [
+            "Financial",
+            "Banking"
+          ]
+        }
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<section class="prose">
+  <h2 id="start">Get started</h2>
+  <p>mispql needs a MISP 3.0 server and Python 3.11 or later. Your role on the server needs
+  the <strong>Complex query</strong> permission, or you need to be a site administrator; it is
+  off for every role until an administrator turns it on.</p>
+  <p>Install it from a checkout of the mispql repository:</p>
+</section>
+
+<pre class="shell"><code>python3 -m venv .venv
+.venv/bin/pip install .</code></pre>
+
+<p class="prose">Tell it where your MISP is in <code>~/.config/mispql/config.toml</code>, readable by
+you alone (<code>chmod 600</code>):</p>
+
+<pre class="config"><code>[default]
+url = "https://misp.example.org"
+key = "your API key"</code></pre>
+
+<p class="prose">Then ask a first question, or start the prompt with <code>mispql</code> alone:</p>
+
+<pre class="shell"><code>.venv/bin/mispql -e "SHOW TABLES"</code></pre>
+
+<section class="prose">
+  <p>The <a href="guide.html">guide</a> covers the language, every table, the output formats
+  and the options in detail.</p>
+</section>
+</main>
+<footer>
+  mispql is free software under the MIT licence.
+  <a href="https://www.misp-project.org/">MISP</a> is an open source threat intelligence sharing platform.
+</footer>
+</body>
+</html>
