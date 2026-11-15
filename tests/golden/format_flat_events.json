@@ -1,0 +1,27 @@
+{
+  "plan": "SearchPlan",
+  "table": "events",
+  "endpoint": "/events/restSearch",
+  "body": {
+    "returnFormat": "json",
+    "metadata": 1,
+    "limit": 5,
+    "page": 1,
+    "order": [
+      "id desc"
+    ],
+    "query": {
+      "date": {
+        ">=": "7d"
+      }
+    }
+  },
+  "output": "flat",
+  "columns": null,
+  "skip": 0,
+  "spans": {
+    "query": "date >= '7d'",
+    "query.<unknown>": "date",
+    "order[0]": "event_id DESC"
+  }
+}

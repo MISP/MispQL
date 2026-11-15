@@ -4,6 +4,7 @@
   "endpoint": "/events/restSearch",
   "body": {
     "returnFormat": "json",
+    "metadata": 1,
     "limit": 5,
     "page": 1,
     "order": [

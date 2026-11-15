@@ -102,6 +102,8 @@ class _Select:
                 f'a column list needs FORMAT table, FORMAT flat or no FORMAT: '
                 f'FORMAT {verbatim} is printed as MISP sends it', stmt.format.start, stmt.format.end)
         body = {'returnFormat': verbatim or 'json'}
+        if self.table.metadata and (columns or output in RENDERINGS):
+            body['metadata'] = 1
         if limit:
             body.update(limit=limit, page=page)
         if order:

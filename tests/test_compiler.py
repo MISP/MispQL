@@ -108,6 +108,21 @@ def test_query_names_in_column_lists_become_row_keys():
     assert (plan.columns, plan.body['query']) == (['info', 'meta.org'], {'eventinfo': 'x'})
 
 
+@pytest.mark.parametrize('text, metadata', [
+    ('SELECT id, info FROM events LIMIT 5', True),
+    ('SELECT id, Attribute.value FROM events LIMIT 5 FORMAT flat', True),
+    ('SELECT * FROM events LIMIT 5 FORMAT table', True),
+    ('SELECT * FROM events LIMIT 5 FORMAT flat', True),
+    ('SELECT * FROM events LIMIT 5', False),
+    ('SELECT * FROM events LIMIT 5 FORMAT json', False),
+    ('SELECT * FROM events LIMIT 5 FORMAT csv', False),
+    ('SELECT id, value FROM attributes LIMIT 5', False),
+    ('SELECT * FROM objects LIMIT 5 FORMAT table', False),
+])
+def test_metadata_when_the_tool_flattens_event_rows(text, metadata):
+    assert ('metadata' in compile_one(text).body) == metadata
+
+
 def test_unaligned_offset_is_fine_with_the_tools_renderings():
     for rendering in ('', 'FORMAT table', 'FORMAT flat'):
         plan = compile_one(f'SELECT * FROM attributes LIMIT 10 OFFSET 15 {rendering}')

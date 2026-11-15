@@ -14,6 +14,9 @@ class Table:
     # one-row metadata page
     count: str
     aliases: dict = field(default_factory=dict)  # column list: query field name -> row key
+    # Rows the tool flattens are fetched with metadata: 1. It leaves out only lists of
+    # records (an event's attributes, objects, reports), which flattening drops anyway.
+    metadata: bool = False
     path: str = '/{name}/{action}'  # the endpoints, action being restSearch or queryDescribe
 
     @property
@@ -60,6 +63,7 @@ TABLES = {table.name: table for table in (
             'event_id': 'id', 'eventinfo': 'info', 'org': 'Orgc.name', 'event_timestamp': 'timestamp',
             'tags': 'Tag',
         },
+        metadata=True,
     ),
     Table(
         name='objects',
