@@ -14,7 +14,7 @@ def quiet():
 
 
 def test_sprites_are_rectangles():
-    sprites = [SHIP, spaceimpact.BIG_BOOM, spaceimpact.BOX, *spaceimpact.ICONS.values(), *spaceimpact.DIGITS,
+    sprites = [SHIP, *spaceimpact.ROCKS, spaceimpact.BIG_BOOM, spaceimpact.BOX, *spaceimpact.ICONS.values(), *spaceimpact.DIGITS,
                *(kind[0] for kind in spaceimpact.KINDS.values()), *(boss[0] for boss in BOSSES.values())]
     for sprite in sprites:
         assert len({len(row) for row in sprite}) == 1, sprite
@@ -118,6 +118,26 @@ def test_each_level_ends_with_its_boss(level):
     g.step()
     assert (g.level, g.notice) == (level + 1, f'Level {level + 1}')
     assert g.pickups[0][2] == 'heart'
+
+
+def ground(g):
+    canvas = lcd.Canvas(g.height)
+    g.draw_ground(canvas)
+    return {(x, y) for y, row in enumerate(canvas.px) for x, on in enumerate(row) if on}
+
+
+def test_the_ground_scrolls_and_does_no_harm():
+    g = quiet()
+    g.y = H - len(SHIP)  # down among the hills
+    before = ground(g)
+    assert before and min(y for _, y in before) >= spaceimpact.TOP + H - 15
+    g.step()
+    g.step()  # one pixel
+    after = ground(g)
+    assert {(x, y) for x, y in after if x < lcd.WIDTH - 1} == {(x - 1, y) for x, y in before if x > 0}
+    for _ in range(1000):
+        g.step()
+    assert g.lives == spaceimpact.LIVES and len(g.ridge) < 400
 
 
 def test_status_bar_is_pixels():

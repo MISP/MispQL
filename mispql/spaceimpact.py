@@ -16,6 +16,7 @@ BANNER = 40  # frames "Level n" shows before the wave comes
 DROP_EVERY = 6  # kills between two pick-ups
 WEAPONS = {'missile': 3, 'laser': 2, 'bomb': 2}  # what a pick-up gives
 BEAM, FUSE, BLAST = 8, 18, (14, 10)  # frames a laser lasts; frames to a bomb going off; its reach
+GROUND = 0.5  # pixels the ground scrolls per frame; it is scenery, nothing hits it
 
 SHIP = (
     '#..........',
@@ -31,6 +32,11 @@ BOOM = ('#...#', '.#.#.', '..#..', '.#.#.', '#...#')
 BIG_BOOM = ('#...#...#', '.#..#..#.', '..#.#.#..', '...###...', '#########', '...###...', '..#.#.#..',
             '.#..#..#.', '#...#...#')
 HEART = ('##.##', '#####', '.###.', '..#..')
+ROCKS = (
+    ('.###.', '#...#', '#...#', '#..#.', '.##..'),
+    ('..###..', '.#...#.', '#.....#', '.#...#.', '..###..'),
+    ('...####....', '.##....##..', '#........##', '#.........#', '.##.....##.', '...#####...'),
+)
 BOX = ('#######',) + ('#.....#',) * 5 + ('#######',)
 ICONS = {
     'missile': ('#....', '####.', '#####', '####.', '#....'),
@@ -129,6 +135,9 @@ class Game:
         self.shots, self.missiles, self.bombs, self.enemy_shots = [], [], [], []
         self.enemies, self.pickups, self.booms = [], [], []
         self.cooldown = self.blink = self.beam = self.clock = self.kills = 0
+        self.land = random.Random(rng.random())  # the ground's own, so enemies come as they would without it
+        self.scroll, self.ridge, self.ridge_from, self.rocks = 0.0, [], 0, []
+        self.ground()
         self.start(1)
 
     def start(self, level):
@@ -162,6 +171,8 @@ class Game:
 
     def step(self):
         self.clock += 1
+        self.scroll += GROUND
+        self.ground()
         self.cooldown, self.blink, self.banner = (max(n - 1, 0) for n in (self.cooldown, self.blink, self.banner))
         self.spawn()
         for shot in self.shots:
@@ -186,6 +197,22 @@ class Game:
         self.enemy_shots = [shot for shot in self.enemy_shots if shot[0] > -3 and -1 < shot[1] < H]
         self.pickups = [pickup for pickup in self.pickups if pickup[0] > -len(BOX[0])]
         self.enemies = [enemy for enemy in self.enemies if enemy.hp > 0 and enemy.x > -len(_sprite(enemy)[0])]
+
+    def ground(self):
+        """Lay the ground out to the right edge of the screen: hills along the bottom (`ridge`
+        holds their height per column), rocks above them."""
+        left = int(self.scroll)
+        while self.ridge_from + len(self.ridge) < left + lcd.WIDTH:
+            x, flat = self.ridge_from + len(self.ridge), self.land.randrange(4, 16)
+            if self.land.random() < 0.6:
+                rock = self.land.choice(ROCKS)
+                self.rocks.append([x + self.land.randrange(flat), self.land.randrange(H - 15, H - 6 - len(rock)), rock])
+            rise, top = self.land.randrange(2, 7), self.land.randrange(6)
+            self.ridge += [0] * flat + list(range(1, rise + 1)) + [rise] * top + list(range(rise, 0, -1))
+        if left - self.ridge_from > 200:
+            del self.ridge[:left - self.ridge_from]
+            self.ridge_from = left
+        self.rocks = [rock for rock in self.rocks if rock[0] + len(rock[2][0]) > left]
 
     def spawn(self):
         if self.banner:
@@ -340,7 +367,17 @@ class Game:
         self.blink = BLINK
         self.over = not self.lives
 
+    def draw_ground(self, canvas):
+        left = int(self.scroll)
+        for x in range(lcd.WIDTH):
+            height = self.ridge[left + x - self.ridge_from]
+            if height:
+                canvas.fill(x, TOP + H - height, 1, 1)
+        for x, y, rock in self.rocks:
+            canvas.draw(x - left, TOP + y, rock)
+
     def draw(self, canvas):
+        self.draw_ground(canvas)
         for i in range(self.lives):
             canvas.draw(1 + 6 * i, 0, HEART)
         if self.weapon:
