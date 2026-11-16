@@ -13,31 +13,38 @@ STYLE = Style.from_dict({'lcd': 'bg:#c7f0d8 #43523d'})
 
 
 class Canvas:
-    def __init__(self):
-        self.px = [[False] * WIDTH for _ in range(HEIGHT)]
+    def __init__(self, height=HEIGHT):
+        self.height = height
+        self.px = [[False] * WIDTH for _ in range(height)]
 
     def fill(self, x, y, w, h):
         x0, x1 = max(x, 0), min(x + w, WIDTH)
-        for row in self.px[max(y, 0):max(min(y + h, HEIGHT), 0)]:
+        for row in self.px[max(y, 0):max(min(y + h, self.height), 0)]:
             row[x0:x1] = [True] * max(x1 - x0, 0)
 
     def draw(self, x, y, sprite):
         """`sprite` is rows of '#' (on) and '.' (off); what falls outside the screen is cut."""
         for dy, line in enumerate(sprite):
-            if 0 <= y + dy < HEIGHT:
+            if 0 <= y + dy < self.height:
                 for dx, c in enumerate(line):
                     if c == '#' and 0 <= x + dx < WIDTH:
                         self.px[y + dy][x + dx] = True
 
     def lines(self):
-        return [''.join(HALF[pair] for pair in zip(self.px[y], self.px[y + 1])) for y in range(0, HEIGHT, 2)]
+        return [''.join(HALF[pair] for pair in zip(self.px[y], self.px[y + 1])) for y in range(0, self.height, 2)]
+
+
+def rows_needed(game):
+    """A game draws on a canvas `game.height` pixels high (HEIGHT if it does not say), under a
+    line of text from `game.status()` if it has one."""
+    return getattr(game, 'height', HEIGHT) // 2 + hasattr(game, 'status')
 
 
 def render(game, high, best, columns, rows):
     """The whole screen for `game`, centred, as prompt_toolkit formatted text."""
-    if columns < WIDTH or rows <= HEIGHT // 2:
-        return [('', f'{game.title} needs a {WIDTH}x{HEIGHT // 2 + 1} terminal. q leaves.')]
-    canvas = Canvas()
+    if columns < WIDTH or rows < rows_needed(game):
+        return [('', f'{game.title} needs a {WIDTH}x{rows_needed(game)} terminal. q leaves.')]
+    canvas = Canvas(getattr(game, 'height', HEIGHT))
     game.draw(canvas)
     lines = canvas.lines()
     if game.over:
@@ -51,8 +58,9 @@ def render(game, high, best, columns, rows):
         for k, text in enumerate(message):
             line = lines[top + k]
             lines[top + k] = line[:start] + text.center(width) + line[start + width:]
-    left, right = game.status()
-    lines.insert(0, left.ljust(WIDTH - len(right)) + right)
+    if hasattr(game, 'status'):
+        left, right = game.status()
+        lines.insert(0, left.ljust(WIDTH - len(right)) + right)
     pad = ' ' * ((columns - WIDTH) // 2)
     text = [('', '\n' * ((rows - len(lines)) // 2))]
     for line in lines:
@@ -68,7 +76,7 @@ def play(new_game, keys, high_score_file, tick):
     best = False
 
     def fits(size):
-        return size.columns >= WIDTH and size.rows > HEIGHT // 2
+        return size.columns >= WIDTH and size.rows >= rows_needed(game)
 
     async def ticking():
         nonlocal high, best
