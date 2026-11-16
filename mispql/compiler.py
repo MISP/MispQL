@@ -54,9 +54,30 @@ class ShowTablesPlan(Plan):
     endpoints: dict
 
 
+@dataclass(kw_only=True)
+class ShowDatabasesPlan(Plan):
+    pass
+
+
+@dataclass(kw_only=True)
+class UsePlan(Plan):
+    database: str
+
+
+@dataclass(kw_only=True)
+class WhoamiPlan(Plan):
+    pass
+
+
 def compile_statement(statement):
     if isinstance(statement, nodes.ShowTables):
         return ShowTablesPlan(endpoints={name: table.discovery for name, table in TABLES.items()})
+    if isinstance(statement, nodes.ShowDatabases):
+        return ShowDatabasesPlan()
+    if isinstance(statement, nodes.Use):
+        return UsePlan(database=statement.database.value)
+    if isinstance(statement, nodes.Whoami):
+        return WhoamiPlan()
     if isinstance(statement, nodes.Describe):
         table = _table(statement.table)
         return DescribePlan(table=table.name, endpoint=table.discovery)

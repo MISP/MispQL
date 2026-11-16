@@ -1,0 +1,9 @@
+# The profiles of the guide's config example, for its database examples; no keys.
+[default]
+url = "https://misp.example.org"
+
+[readonly]
+url = "https://misp.example.org"
+
+[test]
+url = "https://misp-test.example.org"

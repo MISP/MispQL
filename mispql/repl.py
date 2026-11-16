@@ -10,17 +10,19 @@ from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 
-from mispql import __version__, cli, config
+from mispql import __version__, cli, config, snake
 from mispql.client import Client, ClientError
+from mispql.connections import describe
 from mispql.errors import MispQLError
 from mispql.lexer import KEYWORDS, tokenize
 from mispql.tables import TABLES
 
-COMMANDS = ('quit', 'exit', 'help')
+COMMANDS = ('quit', 'exit', 'help', 'snake2')
 HELP = f"""\
 SELECT * | COUNT(*) | field, ... FROM table
   [WHERE condition] [ORDER BY field [ASC|DESC], ...] [LIMIT n [OFFSET n]] [FORMAT word];
 DESCRIBE table;  SHOW TABLES;
+SHOW DATABASES;  USE database;  WHOAMI;   a database is a profile of the config file
 {textwrap.fill('tables: ' + ', '.join(TABLES), 100, subsequent_indent='  ')}
 condition: field = != < > <= >= value | field [NOT] IN (value, ...) | field [NOT] LIKE 'a%',
   combined with AND, OR, NOT and parentheses; values are 'text', 123, TRUE or FALSE
@@ -30,25 +32,26 @@ End a statement with ; (Alt-Enter runs it without). Ctrl-C clears, Ctrl-D or qui
 
 
 def main(args):
+    connections = cli.connections(args)
     client = None
     if not args.dry_run:
         try:
-            client = cli.connect(args)
+            client = connections.client
         except (config.ConfigError, ClientError) as e:
             cli.stderr(f'ERROR: {e}')
             return cli.USAGE
     # Completion fetches fields in its own thread: its own session, and no --verbose trace.
     completions = Completions(client and Client(client.settings))
     session = PromptSession(
-        message='mispql> ',
+        message=lambda: prompt(connections),
         multiline=Condition(lambda: not complete(session.default_buffer.text)),
         prompt_continuation=lambda width, line_number, wrap_count: '-> '.rjust(width),
         history=_history(),
         completer=ThreadedCompleter(completions),
         complete_while_typing=False,
     )
-    where = 'dry run: nothing is sent' if client is None else client.settings.url
-    print(f'mispql {__version__}, {where}. End statements with ;  help for help, quit to leave.')
+    print(f'mispql {__version__}, {_where(connections, client)}. End statements with ;  help for help, '
+          'quit to leave.')
     while True:
         try:
             text = session.prompt()
@@ -62,10 +65,32 @@ def main(args):
         if command == 'help':
             print(HELP)
             continue
+        if command == 'snake2':
+            snake.play(_state() / 'snake2')
+            continue
+        shown = connections.current
         try:
-            cli.run(text, lambda: client, args.dry_run)
+            cli.run(text, connections, args.dry_run, interactive=True)
         except KeyboardInterrupt:
             cli.stderr('interrupted')
+        if connections.current != shown:
+            completions.reset(Client(connections.client.settings))
+
+
+def prompt(connections):
+    return f'mispql [{connections.current}]> ' if connections.current else 'mispql> '
+
+
+def _where(connections, client):
+    """Who the session starts as; the URL alone, and a warning, when MISP does not say."""
+    if client is None:
+        return 'dry run: nothing is sent'
+    name, url = connections.current, client.settings.url
+    found = connections.identify(name)
+    if 'error' in found:
+        cli.stderr(f'WARNING: cannot tell who {name} is: {found["error"]}')
+        return f'{name} at {url}'
+    return f'{describe(name, found)} at {url}'
 
 
 def complete(text):
@@ -89,6 +114,11 @@ class Completions(Completer):
         self.client = client
         self.fields = {}
         self.lock = threading.Lock()
+
+    def reset(self, client):
+        """Another connection: its account may see other fields."""
+        with self.lock:
+            self.client, self.fields = client, {}
 
     def get_completions(self, document, complete_event):
         if _in_string(document.text_before_cursor):
@@ -129,9 +159,12 @@ def _statement_table(document):
     return match.group(1).lower() if match else None
 
 
+def _state():
+    return Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local' / 'state') / 'mispql'
+
+
 def _history():
-    state = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local' / 'state')
-    path = state / 'mispql' / 'history'
+    path = _state() / 'history'
     try:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         # Statements hold indicator values: the file is the user's alone.

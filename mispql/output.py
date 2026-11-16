@@ -4,10 +4,11 @@ import io
 import json
 
 from mispql.client import chunks
-from mispql.compiler import CountPlan, DescribePlan, ShowTablesPlan
+from mispql.compiler import CountPlan, DescribePlan, ShowDatabasesPlan, ShowTablesPlan, WhoamiPlan
 from mispql.tables import TABLES
 
 CELL_WIDTH = 60
+IDENTITY = ['database', 'url', 'email', 'role', 'org']  # SHOW DATABASES, WHOAMI
 
 
 def write(plan, result, out):
@@ -19,6 +20,10 @@ def write(plan, result, out):
         renderer = _describe
     elif isinstance(plan, ShowTablesPlan):
         renderer = _show_tables
+    elif isinstance(plan, ShowDatabasesPlan):
+        renderer = _show_databases
+    elif isinstance(plan, WhoamiPlan):
+        renderer = _whoami
     elif plan.output == 'verbatim':
         for chunk in chunks(result):
             out.write(chunk)
@@ -138,6 +143,22 @@ def _show_tables(plan, tables, out):
     return []
 
 
+def _show_databases(plan, rows, out):
+    _box(['', *IDENTITY], [['*' if row['current'] else '', *_identity(row)] for row in rows], out, 'database')
+    return []
+
+
+def _whoami(plan, row, out):
+    _box(IDENTITY, [_identity(row)], out, None)
+    return []
+
+
+def _identity(row):
+    if 'error' in row:
+        return [row['database'], row['url'], f'({row["error"]})', '', '']
+    return [row[column] for column in IDENTITY]
+
+
 def _box(columns, rows, out, noun='row'):
     lines = [[_cut(cell) for cell in row] for row in rows]
     widths = [max([len(column)] + [len(line[i]) for line in lines]) for i, column in enumerate(columns)]
@@ -149,7 +170,8 @@ def _box(columns, rows, out, noun='row'):
         out.write(_table_line(line, widths))
     if lines:
         out.write(rule)
-    out.write(f'{len(lines)} {noun}{"" if len(lines) == 1 else "s"}\n')
+    if noun:
+        out.write(f'{len(lines)} {noun}{"" if len(lines) == 1 else "s"}\n')
 
 
 def _cut(text):

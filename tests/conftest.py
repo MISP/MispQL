@@ -32,6 +32,16 @@ class Stub:
 
 @pytest.fixture
 def stub():
+    yield from _serve()
+
+
+@pytest.fixture
+def other_stub():
+    """A second MISP, for keys that must not cross from one to the other."""
+    yield from _serve()
+
+
+def _serve():
     stub = Stub()
 
     class Handler(BaseHTTPRequestHandler):

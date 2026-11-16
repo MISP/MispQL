@@ -25,6 +25,7 @@
     <li><a href="#how">How it works</a></li>
     <li><a href="#setup">Setting up</a></li>
     <li><a href="#running">Running mispql</a></li>
+    <li><a href="#databases">Databases</a></li>
     <li><a href="#statements">Statements</a></li>
     <li><a href="#conditions">Conditions</a></li>
     <li><a href="#columns">Columns</a></li>
@@ -124,6 +125,10 @@ key = "..."            # chmod 600 the file
 verify_ssl = true      # or the path of a CA bundle
 timeout = 300          # seconds to wait for an answer
 
+[readonly]             # another account on the same MISP
+url = "https://misp.example.org"
+key = "..."
+
 [test]
 url = "https://misp-test.example.org"
 key = "..."</code></pre>
@@ -211,6 +216,56 @@ by you alone.</p>
   <tr><td>141</td><td>stdout was closed early, as by <code>| head</code></td></tr>
 </table></div>
 
+<h2 id="databases">Databases</h2>
+<p>Each profile of the config file is a database: one MISP and one API key. Two profiles can
+point at the same MISP with different accounts, to see what each of them sees.
+<code>SHOW DATABASES</code> lists the profiles and asks each MISP whose key it is; a MISP that
+does not answer, or turns the key down, says so in its row.</p>
+</section>
+
+<div class="example" data-sample="databases">
+<pre class="mql"><code>SHOW DATABASES</code></pre>
+<pre class="output"><code>+---+----------+-------------------------------+---------------------+-----------+-------+
+|   | database | url                           | email               | role      | org   |
++---+----------+-------------------------------+---------------------+-----------+-------+
+| * | default  | https://misp.example.org      | analyst@example.org | Org Admin | CIRCL |
+|   | readonly | https://misp.example.org      | reader@example.org  | Read Only | CIRCL |
+|   | test     | https://misp-test.example.org | (key rejected)      |           |       |
++---+----------+-------------------------------+---------------------+-----------+-------+
+3 databases</code></pre>
+<pre class="request"><code>GET /users/view/me (default)
+GET /users/view/me (readonly)
+GET /users/view/me (test)</code></pre>
+</div>
+
+<section class="prose">
+<p><code>USE</code> switches to another database once its MISP accepts the key. At the prompt
+it says who you are now, and the prompt shows the database in use
+(<code>mispql [readonly]&gt;</code>); in a script, each statement runs on the database chosen
+last. <code>WHOAMI</code> shows the current one.</p>
+</section>
+
+<div class="example">
+<pre class="mql"><code>USE readonly</code></pre>
+<pre class="request"><code>GET /users/view/me (readonly)</code></pre>
+</div>
+
+<div class="example" data-sample="whoami">
+<pre class="mql"><code>WHOAMI</code></pre>
+<pre class="output"><code>+----------+--------------------------+--------------------+-----------+-------+
+| database | url                      | email              | role      | org   |
++----------+--------------------------+--------------------+-----------+-------+
+| readonly | https://misp.example.org | reader@example.org | Read Only | CIRCL |
++----------+--------------------------+--------------------+-----------+-------+</code></pre>
+<pre class="request"><code>GET /users/view/me</code></pre>
+</div>
+
+<section class="prose">
+<p>Keys never cross databases: <code>MISPQL_URL</code>, <code>MISPQL_KEY</code> and
+<code>--key-file</code> apply to the database the session starts with, and every other profile
+is used as written. A profile without a key asks for one at a terminal. Names with capitals,
+dots or spaces go in backticks: <code>USE `Prod.EU`</code>.</p>
+
 <h2 id="statements">Statements</h2>
 </section>
 
@@ -220,7 +275,10 @@ by you alone.</p>
   [LIMIT n [OFFSET n]]
   [FORMAT word];
 DESCRIBE table;
-SHOW TABLES;</code></pre>
+SHOW TABLES;
+SHOW DATABASES;
+USE database;
+WHOAMI;</code></pre>
 
 <section class="prose">
 <ul>

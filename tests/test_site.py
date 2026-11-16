@@ -15,6 +15,7 @@ import pytest
 from mispql import cli
 from mispql.client import QueryErrors
 from mispql.compiler import compile_statement
+from mispql.connections import Connections
 from mispql.output import write
 from mispql.parser import parse
 from mispql.tables import TABLES
@@ -62,6 +63,20 @@ SAMPLES = {
 }
 SAMPLES['events-flat'] = SAMPLES['events-table']
 SAMPLES['events-columns'] = SAMPLES['events-table'][:2]
+SAMPLES['databases'] = [
+    {'current': True, 'database': 'default', 'url': 'https://misp.example.org', 'email': 'analyst@example.org',
+     'role': 'Org Admin', 'org': 'CIRCL'},
+    {'current': False, 'database': 'readonly', 'url': 'https://misp.example.org', 'email': 'reader@example.org',
+     'role': 'Read Only', 'org': 'CIRCL'},
+    {'current': False, 'database': 'test', 'url': 'https://misp-test.example.org', 'error': 'key rejected'},
+]
+SAMPLES['whoami'] = {**SAMPLES['databases'][1], 'current': True}
+
+
+@pytest.fixture(autouse=True)
+def site_config(no_config, monkeypatch):
+    """The database examples list the profiles of the guide's config example."""
+    monkeypatch.setenv('MISPQL_CONFIG', str(HERE / 'site_config.toml'))
 
 
 def examples(page):
@@ -72,7 +87,7 @@ def dry_run(text):
     """What mispql --dry-run -e TEXT prints: requests on stdout, errors on stderr."""
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        cli.run(text, get_client=None, dry_run=True)
+        cli.run(text, Connections(), dry_run=True)
     return {'request': out.getvalue(), 'error': err.getvalue()}
 
 

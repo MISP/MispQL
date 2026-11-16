@@ -110,3 +110,22 @@ def test_readable_key_warns(tmp_path):
 def test_ca_bundle_path(tmp_path):
     path = write(tmp_path / 'c.toml', '[default]\nurl = "x"\nverify_ssl = "~/ca.pem"\n')
     assert load(config=path, env={}).verify_ssl == str(tmp_path / 'home' / 'ca.pem')
+
+
+def test_profile_names(tmp_path):
+    path = write(tmp_path / 'c.toml', '[b]\nurl = "https://b"\n[a]\nurl = "https://a"\n')
+    assert config.profiles(path) == ['b', 'a']
+    assert load(config=path, profile='a', env={}).name == 'a'
+    assert load(env={'MISPQL_URL': 'https://env'}).name == 'default'
+
+
+def test_a_profile_as_written_takes_no_overrides(tmp_path, monkeypatch):
+    path = write(tmp_path / 'c.toml', '[a]\nurl = "https://a"\nkey = "ka"\n[b]\nurl = "https://b"\n[c]\nkey = "kc"\n')
+    monkeypatch.setenv('MISPQL_URL', 'https://env')
+    monkeypatch.setenv('MISPQL_KEY', 'k-env')
+    settings = config.load_profile(path, 'b')
+    assert (settings.name, settings.url, settings.key) == ('b', 'https://b', None)
+    with pytest.raises(ConfigError, match=r'no profile \[d\]'):
+        config.load_profile(path, 'd')
+    with pytest.raises(ConfigError, match=r'\[c\]: no url'):
+        config.load_profile(path, 'c')

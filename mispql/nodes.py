@@ -89,3 +89,18 @@ class Describe(Node):
 @dataclass(kw_only=True)
 class ShowTables(Node):
     pass
+
+
+@dataclass(kw_only=True)
+class ShowDatabases(Node):
+    pass
+
+
+@dataclass(kw_only=True)
+class Use(Node):
+    database: Name
+
+
+@dataclass(kw_only=True)
+class Whoami(Node):
+    pass

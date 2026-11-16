@@ -16,6 +16,7 @@ from mispql.cli import main
 from mispql.client import Client, ClientError
 
 ROWS = {'response': {'Attribute': [{'id': '1'}]}}
+ME = {'User': {'email': 'me@example.org'}, 'Role': {'name': 'User'}, 'Organisation': {'name': 'ORG'}}
 pytestmark = pytest.mark.usefixtures('no_config')
 
 
@@ -30,6 +31,7 @@ class Terminal:
 def misp(stub, monkeypatch):
     monkeypatch.setenv('MISPQL_URL', stub.url)
     monkeypatch.setenv('MISPQL_KEY', 'the-key')
+    stub.reply(ME)  # the banner's
     return stub
 
 
@@ -71,9 +73,9 @@ def test_statements_run_until_quit(misp, session):
     code, out, err = session('SELECT * FROM attributes\rLIMIT 1;\rSELECT id FROM attributes LIMIT 2\x1b\r'
                              'quit\rSELECT * FROM;\r')
     assert (code, err) == (0, '')
-    assert out.startswith(f'mispql 0.1.0, {misp.url}. End statements with ;')
+    assert out.startswith(f'mispql 0.1.0, default: me@example.org, User, ORG at {misp.url}. End statements with ;')
     assert out.count(json.dumps(ROWS['response']['Attribute'], indent=2)) == 2
-    assert [r['body']['limit'] for r in misp.requests] == [1, 2]
+    assert [r['body']['limit'] for r in misp.requests[1:]] == [1, 2]
 
 
 def test_errors_leave_the_session_open(misp, session):
@@ -81,7 +83,7 @@ def test_errors_leave_the_session_open(misp, session):
     code, out, err = session('SELECT * FROM;\rSELECT * FROM attributes LIMIT 1;\r\x04')
     assert code == 0
     assert err == "ERROR 1:14: expected a table name, found ';'\nSELECT * FROM;\n             ^\n"
-    assert len(misp.requests) == 1
+    assert len(misp.requests) == 2
 
 
 def test_help_and_exit(misp, session):
@@ -90,10 +92,15 @@ def test_help_and_exit(misp, session):
     assert repl.HELP in out
 
 
+def test_snake2(misp, session):
+    code, out, err = session('SNAKE2;\r\x1b[Aq' 'quit\r')
+    assert (code, err) == (0, '')
+
+
 def test_ctrl_c_clears_the_statement(misp, session):
     misp.reply(ROWS)
     session('SELECT * FROM attributes\rWHERE id = 1\x03SELECT * FROM attributes LIMIT 3;\rquit\r')
-    assert [r['body'] for r in misp.requests] == [{'returnFormat': 'json', 'limit': 3, 'page': 1}]
+    assert [r['body'] for r in misp.requests[1:]] == [{'returnFormat': 'json', 'limit': 3, 'page': 1}]
 
 
 def test_ctrl_c_abandons_a_running_query(misp, session, monkeypatch):
@@ -109,7 +116,7 @@ def test_ctrl_c_abandons_a_running_query(misp, session, monkeypatch):
     misp.reply(ROWS)
     code, out, err = session('SELECT * FROM attributes LIMIT 1;\rSELECT * FROM attributes LIMIT 1;\rquit\r')
     assert (code, err) == (0, 'interrupted\n')
-    assert len(calls) == 2 and len(misp.requests) == 1
+    assert len(calls) == 2 and len(misp.requests) == 2
 
 
 def test_history_is_private(misp, session, tmp_path):
@@ -222,3 +229,41 @@ def test_batch_never_loads_prompt_toolkit():
             "print('prompt_toolkit' in sys.modules)")
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
     assert result.stdout.splitlines()[-1] == 'False'
+
+
+@pytest.fixture
+def two(misp, other_stub, tmp_path, monkeypatch):
+    """[default] is misp, with the environment's key; [other] is a second MISP."""
+    path = tmp_path / 'config.toml'
+    path.write_text(f'[default]\nurl = "{misp.url}"\n[other]\nurl = "{other_stub.url}"\nkey = "key-o"\n')
+    path.chmod(0o600)
+    monkeypatch.setenv('MISPQL_CONFIG', str(path))
+    return other_stub
+
+
+def test_use_says_who_and_resets_completion(two, session, monkeypatch):
+    resets = []
+    monkeypatch.setattr(repl.Completions, 'reset', lambda self, client: resets.append(client.settings.url))
+    two.reply({'User': {'email': 'o@example.org'}, 'Role': {'name': 'Admin'}, 'Organisation': {'name': 'O'}})
+    code, out, err = session('USE other;\rUSE nope;\rquit\r')
+    assert (code, resets) == (0, [two.url])
+    assert '\nother: o@example.org, Admin, O\n' in out
+    assert 'unknown database nope: the config has default, other' in err
+    assert {r['headers']['Authorization'] for r in two.requests} == {'key-o'}
+
+
+def test_prompt_names_the_database():
+    class Connections:
+        current = None
+    assert repl.prompt(Connections()) == 'mispql> '
+    Connections.current = 'prod-readonly'
+    assert repl.prompt(Connections()) == 'mispql [prod-readonly]> '
+
+
+def test_banner_warns_when_misp_does_not_say_who(stub, session, monkeypatch):
+    monkeypatch.setenv('MISPQL_URL', stub.url)
+    monkeypatch.setenv('MISPQL_KEY', 'the-key')
+    stub.reply({'name': 'Authentication failed.'}, status=403)
+    code, out, err = session('quit\r')
+    assert out.startswith(f'mispql 0.1.0, default at {stub.url}. End statements with ;')
+    assert (code, err) == (0, 'WARNING: cannot tell who default is: key rejected\n')

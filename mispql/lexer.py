@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from mispql.errors import MispQLError
 
 KEYWORDS = frozenset({
-    'AND', 'ASC', 'BY', 'COUNT', 'DESC', 'DESCRIBE', 'FALSE', 'FORMAT', 'FROM', 'IN',
-    'LIKE', 'LIMIT', 'NOT', 'OFFSET', 'OR', 'ORDER', 'SELECT', 'SHOW', 'TABLES', 'TRUE',
-    'WHERE',
+    'AND', 'ASC', 'BY', 'COUNT', 'DATABASES', 'DESC', 'DESCRIBE', 'FALSE', 'FORMAT', 'FROM',
+    'IN', 'LIKE', 'LIMIT', 'NOT', 'OFFSET', 'OR', 'ORDER', 'SELECT', 'SHOW', 'TABLES', 'TRUE',
+    'USE', 'WHERE', 'WHOAMI',
 })
 SYMBOLS = ('!=', '<>', '<=', '>=', '=', '<', '>', '(', ')', ',', '.', '*', ';', '-')
 WORD_CHARS = frozenset('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_')

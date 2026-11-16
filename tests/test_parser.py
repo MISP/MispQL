@@ -3,7 +3,7 @@ import pytest
 from mispql.errors import MispQLError, position
 from mispql.nodes import (
     And, Comparison, Count, Describe, Field, Literal, Name, Not, Or, OrderItem, Select,
-    ShowTables, Star,
+    ShowDatabases, ShowTables, Star, Use, Whoami,
 )
 from mispql.parser import parse
 
@@ -30,6 +30,23 @@ def test_show_tables_and_describe():
     assert parse('SHOW TABLES; describe events; DESC `Objects`') == [
         ShowTables(), Describe(table=Name(value='events')), Describe(table=Name(value='Objects')),
     ]
+
+
+def test_databases():
+    assert parse('show databases; USE prod; whoami') == [
+        ShowDatabases(), Use(database=Name(value='prod')), Whoami(),
+    ]
+
+
+@pytest.mark.parametrize('text, value', [
+    ('USE prod-readonly', 'prod-readonly'),
+    ('USE Prod-2', 'prod-2'),
+    ('USE `Prod.EU`', 'Prod.EU'),
+])
+def test_database_names(text, value):
+    statement = one(text)
+    assert statement.database == Name(value=value)
+    assert text[statement.database.start:statement.database.end] == text.split(' ', 1)[1]
 
 
 def test_select_columns():
@@ -195,8 +212,12 @@ def test_spans():
     ('SELECT * FROM events ORDER id', 1, 28, 'expected BY, found id', False),
     ('SELECT * FROM select', 1, 15,
      'expected a table name, found SELECT (quote it with backticks to use it as a name)', False),
-    ('DELETE FROM events', 1, 1, 'expected SELECT, DESCRIBE or SHOW TABLES, found delete', False),
-    ('SHOW events', 1, 6, 'expected TABLES, found events', False),
+    ('DELETE FROM events', 1, 1, 'expected SELECT, DESCRIBE, SHOW, USE or WHOAMI, found delete', False),
+    ('SHOW events', 1, 6, 'expected TABLES or DATABASES, found events', False),
+    ('USE select', 1, 5, 'expected a database name, found SELECT (quote it with backticks to use it as a name)',
+     False),
+    ("USE 'prod'", 1, 5, "expected a database name, found the string 'prod'", False),
+    ('USE', 1, 4, 'expected a database name, found end of input', True),
     ('DESCRIBE events extra', 1, 17, "expected ';', found extra", False),
     ("SELECT * FROM events;\nSELECT *\n  FROM attributes\n  WHERE id = 'x' OR", 4, 20,
      'expected a field name, found end of input', True),

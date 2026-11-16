@@ -77,9 +77,16 @@ class _Parser:
             table = self.name('a table name')
             return nodes.Describe(table=table, start=start, end=table.end)
         if self.keyword('SHOW'):
-            end = self.expect('KEYWORD', 'TABLES', 'TABLES').end
+            if self.keyword('DATABASES'):
+                return nodes.ShowDatabases(start=start, end=self.last_end())
+            end = self.expect('KEYWORD', 'TABLES', 'TABLES or DATABASES').end
             return nodes.ShowTables(start=start, end=end)
-        self.fail('SELECT, DESCRIBE or SHOW TABLES')
+        if self.keyword('USE'):
+            database = self.database_name()
+            return nodes.Use(database=database, start=start, end=database.end)
+        if self.keyword('WHOAMI'):
+            return nodes.Whoami(start=start, end=self.last_end())
+        self.fail('SELECT, DESCRIBE, SHOW, USE or WHOAMI')
 
     def select(self, start):
         columns = self.columns()
@@ -167,9 +174,22 @@ class _Parser:
             return nodes.Name(value=first.value, start=first.start, end=first.end)
         if first.kind not in ('NAME', 'KEYWORD'):
             self.fail('a format name')
-        self.advance()
+        return self.hyphenated()
+
+    def database_name(self):
+        first = self.tok
+        if first.kind == 'NAME' and first.quoted:
+            self.advance()
+            return nodes.Name(value=first.value, start=first.start, end=first.end)
+        if first.kind != 'NAME':
+            hint = ' (quote it with backticks to use it as a name)' if first.kind == 'KEYWORD' else ''
+            self.fail('a database name', hint)
+        return self.hyphenated()
+
+    def hyphenated(self):
+        first = self.advance()
         end = first.end
-        # Format names may hold hyphens (stix-json): glue the pieces written without spaces.
+        # Format and database names may hold hyphens (stix-json): glue the pieces written without spaces.
         while self.at('SYMBOL', '-') and self.tok.start == end:
             piece = self.tokens[self.pos + 1]
             if piece.kind not in ('NAME', 'KEYWORD', 'INT') or piece.quoted or piece.start != self.tok.end:

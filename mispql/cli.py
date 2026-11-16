@@ -1,14 +1,15 @@
 """The mispql command: run MispQL statements from -e, a file or stdin."""
 import argparse
-import getpass
 import json
 import os
 import sys
 from pathlib import Path
 
 from mispql import __version__, config
-from mispql.client import Client, ClientError, QueryErrors
-from mispql.compiler import DescribePlan, SearchPlan, ShowTablesPlan, compile_statement
+from mispql.client import WHOAMI, ClientError, QueryErrors
+from mispql.compiler import (DescribePlan, SearchPlan, ShowDatabasesPlan, ShowTablesPlan, UsePlan, WhoamiPlan,
+                             compile_statement)
+from mispql.connections import Connections, describe
 from mispql.errors import MispQLError, position
 from mispql.output import write
 from mispql.parser import parse
@@ -62,38 +63,47 @@ def _main(args):
     except UsageError as e:
         stderr(f'ERROR: {e}')
         return USAGE
-    return run(text, lambda: connect(args), args.dry_run)
+    return run(text, connections(args), args.dry_run)
 
 
-def run(text, get_client, dry_run=False):
+def run(text, connections, dry_run=False, interactive=False):
     """Check every statement in `text`, then run them in order; returns an exit code."""
     try:
         statements = parse(text)
         plans = [compile_statement(statement) for statement in statements]
+        _check_databases(statements, plans, connections)
+        if dry_run:
+            for plan in plans:
+                _dry_run(plan, connections)
+            return OK
     except MispQLError as e:
         stderr(e.render(text))
         return FAILED
-    if dry_run:
-        for plan in plans:
-            _dry_run(plan)
-        return OK
+    except config.ConfigError as e:
+        stderr(f'ERROR: {e}')
+        return USAGE
     if not plans:
         return OK
     try:
-        client = get_client()
+        connections.client
     except (config.ConfigError, ClientError) as e:
         stderr(f'ERROR: {e}')
         return USAGE
     for statement, plan in zip(statements, plans):
         try:
-            warnings = write(plan, client.run(plan), sys.stdout.buffer)
+            if isinstance(plan, UsePlan):
+                identity = connections.use(plan.database)
+                if interactive:
+                    print(describe(plan.database, identity), flush=True)
+                continue
+            warnings = write(plan, connections.run(plan), sys.stdout.buffer)
         except QueryErrors as e:
             stderr('\n'.join(error.render(text) for error in e.located(plan, statement)))
             return FAILED
-        except ClientError as e:
+        except (ClientError, config.ConfigError) as e:
             line, column = position(text, statement.start)
             stderr(f'ERROR {line}:{column}: {e}')
-            return FAILED
+            return FAILED if isinstance(e, ClientError) else USAGE
         sys.stdout.flush()
         for warning in warnings:
             stderr(f'WARNING: {warning}')
@@ -124,23 +134,34 @@ def _decode(data, name):
         raise UsageError(f'{name}: not UTF-8 (byte {e.start})') from None
 
 
-def connect(args):
-    settings = config.load(args.config, args.profile, args.key_file)
-    for warning in settings.warnings:
-        stderr(f'WARNING: {warning}')
-    if not settings.key and sys.stdin.isatty():
-        try:
-            settings.key = getpass.getpass('MISP API key: ').strip() or None
-        except EOFError:
-            pass
+def connections(args):
     trace = (lambda method, url, body: stderr(_request(method, url, body))) if args.verbose else None
-    return Client(settings, trace=trace)
+    return Connections(args.config, args.profile, args.key_file, trace=trace,
+                       warn=lambda warning: stderr(f'WARNING: {warning}'))
 
 
-def _dry_run(plan):
+def _check_databases(statements, plans, connections):
+    """A USE naming no profile stops the script before anything is sent."""
+    uses = [(statement, plan) for statement, plan in zip(statements, plans) if isinstance(plan, UsePlan)]
+    names = connections.names() if uses else []
+    for statement, plan in uses:
+        if plan.database not in names:
+            have = f'the config has {", ".join(names)}' if names else 'there is no config file'
+            raise MispQLError(f'unknown database {plan.database}: {have}',
+                              statement.database.start, statement.database.end)
+
+
+def _dry_run(plan, connections):
     if isinstance(plan, ShowTablesPlan):
         for endpoint in plan.endpoints.values():
             print(_request('GET', endpoint))
+    elif isinstance(plan, ShowDatabasesPlan):
+        for name in connections.names() or ['default']:
+            print(_request('GET', WHOAMI, note=f' ({name})'))
+    elif isinstance(plan, UsePlan):
+        print(_request('GET', WHOAMI, note=f' ({plan.database})'))
+    elif isinstance(plan, WhoamiPlan):
+        print(_request('GET', WHOAMI))
     elif isinstance(plan, DescribePlan):
         print(_request('GET', plan.endpoint))
     else:

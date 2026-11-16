@@ -7,6 +7,7 @@ from mispql.errors import MispQLError
 from mispql.tables import TABLES
 
 CONNECT_TIMEOUT = 10
+WHOAMI = '/users/view/me'
 
 
 class ClientError(Exception):
@@ -108,6 +109,15 @@ class Client:
         if not found and first_error:
             raise first_error
         return found
+
+    def whoami(self):
+        """The email, role and organisation of the key's user, as MISP reports them."""
+        try:
+            found = self.send('GET', WHOAMI).json()
+            return {'email': found['User']['email'], 'role': found['Role']['name'],
+                    'org': found['Organisation']['name']}
+        except (ValueError, KeyError, TypeError):
+            raise ClientError(f'{WHOAMI}: unexpected answer') from None
 
     def post(self, endpoint, body, stream=False):
         return self.send('POST', endpoint, body, stream)

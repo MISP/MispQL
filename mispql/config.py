@@ -19,31 +19,41 @@ class Settings:
     key: str | None = field(default=None, repr=False)
     verify_ssl: bool | str = True  # or a CA bundle path
     timeout: float = 300  # seconds to wait for an answer
+    name: str = 'default'  # the profile
     source: Path | None = None
     warnings: list[str] = field(default_factory=list)
 
 
 def load(config=None, profile=None, key_file=None, env=os.environ):
-    """Settings from the first config file found, then MISPQL_URL / MISPQL_KEY, then key_file."""
+    """The starting connection: a profile of the first config file found, then MISPQL_URL /
+    MISPQL_KEY, then key_file."""
     path = find_config(config, env)
-    settings = Settings(url='', source=path)
     if path is not None:
-        values = _profile(path, profile)
-        for name, value in values.items():
-            setattr(settings, name, value)
-        if 'key' in values and path.stat().st_mode & (stat.S_IRGRP | stat.S_IROTH):
-            settings.warnings.append(f'{path} holds an API key and is readable by others (chmod 600 it)')
+        settings = _settings(path, _start_name(path, profile))
     elif profile is not None:
         raise ConfigError(f'no config file found for profile {profile}')
+    else:
+        settings = Settings(url='')
     settings.url = env.get('MISPQL_URL') or settings.url
     settings.key = env.get('MISPQL_KEY') or settings.key
     if key_file is not None:
         settings.key = _read_key(Path(key_file))
     if not settings.url:
         raise ConfigError('no MISP URL: set url in a config file, or MISPQL_URL')
-    if isinstance(settings.verify_ssl, str):
-        settings.verify_ssl = str(Path(settings.verify_ssl).expanduser())
     return settings
+
+
+def load_profile(path, name):
+    """A profile as written: the environment and --key-file are for the starting connection only."""
+    settings = _settings(path, name)
+    if not settings.url:
+        raise ConfigError(f'{path} [{name}]: no url')
+    return settings
+
+
+def profiles(path):
+    """The profile names of the config file at `path`, in its order."""
+    return list(_tables(path))
 
 
 def find_config(config=None, env=os.environ):
@@ -63,22 +73,42 @@ def _existing(path, given_by):
     return path
 
 
-def _profile(path, name):
+def _tables(path):
     try:
         with open(path, 'rb') as f:
             data = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
         raise ConfigError(f'{path}: {e}') from None
-    profiles = {key: value for key, value in data.items() if isinstance(value, dict)}
-    if name is None:
-        if 'default' in profiles:
-            name = 'default'
-        elif len(profiles) == 1:
-            name = next(iter(profiles))
-        elif not profiles:
-            raise ConfigError(f'{path}: no profile; add a [default] table')
-        else:
-            raise ConfigError(f'{path}: no [default] profile; pick one of {", ".join(profiles)} with --profile')
+    return {key: value for key, value in data.items() if isinstance(value, dict)}
+
+
+def _start_name(path, name):
+    if name is not None:
+        return name
+    profiles = _tables(path)
+    if 'default' in profiles:
+        return 'default'
+    if len(profiles) == 1:
+        return next(iter(profiles))
+    if not profiles:
+        raise ConfigError(f'{path}: no profile; add a [default] table')
+    raise ConfigError(f'{path}: no [default] profile; pick one of {", ".join(profiles)} with --profile')
+
+
+def _settings(path, name):
+    values = _profile(path, name)
+    settings = Settings(url='', name=name, source=path)
+    for setting, value in values.items():
+        setattr(settings, setting, value)
+    if 'key' in values and path.stat().st_mode & (stat.S_IRGRP | stat.S_IROTH):
+        settings.warnings.append(f'{path} holds an API key and is readable by others (chmod 600 it)')
+    if isinstance(settings.verify_ssl, str):
+        settings.verify_ssl = str(Path(settings.verify_ssl).expanduser())
+    return settings
+
+
+def _profile(path, name):
+    profiles = _tables(path)
     if name not in profiles:
         raise ConfigError(f'{path}: no profile [{name}]')
     values = profiles[name]

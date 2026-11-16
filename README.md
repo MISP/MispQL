@@ -54,7 +54,17 @@ url = "https://misp.example.org"
 key = "..."            # chmod 600 the file
 verify_ssl = true      # or the path of a CA bundle
 timeout = 300          # seconds to wait for an answer
+
+[readonly]             # another account on the same MISP
+url = "https://misp.example.org"
+key = "..."
 ```
+
+Each profile is a database: `SHOW DATABASES` lists them with the user, role
+and organisation each key belongs to, `USE readonly` switches once MISP accepts
+the key, and `WHOAMI` shows the current one. The overrides above apply to the
+profile the session starts with only; a key never reaches another profile's
+URL.
 
 Exit codes: 0 every statement ran, 1 a statement failed, 2 a usage, input or
 config error, 130 interrupted, 141 stdout closed (`| head`).
