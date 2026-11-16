@@ -1,6 +1,6 @@
 import random
 
-from mispql import snake
+from mispql import lcd, snake
 from mispql.snake import LEFT, RIGHT, UP, Game
 
 
@@ -58,9 +58,11 @@ def test_a_creature_comes_every_few_foods_and_leaves():
 
 
 def test_screen_fits_the_terminal():
+    assert snake.WIDTH * snake.CELL + 2 * snake.MARGIN == lcd.WIDTH
+    assert snake.HEIGHT * snake.CELL + 2 * snake.MARGIN == lcd.HEIGHT
     g = game([(0, 0), (snake.WIDTH - 1, 0), (snake.WIDTH - 1, snake.HEIGHT - 1)], food=(3, 3))
     g.bonus, g.bonus_left, g.over = ((5, 5), 2), 7, True
-    lines = ''.join(text for _, text in snake.screen(g, 10, False, 80, 24)).split('\n')
+    lines = ''.join(text for _, text in lcd.render(g, 10, False, 80, 24)).split('\n')
     assert len(lines) <= 24 and max(map(len, lines)) <= 80
-    assert any('Game over!' in line for line in lines)
-    assert 'needs a' in snake.screen(g, 10, False, 79, 24)[0][1]
+    assert any('Game over!' in line for line in lines) and '   7 ' in lines[1]
+    assert 'Snake II needs a' in lcd.render(g, 10, False, 79, 24)[0][1]

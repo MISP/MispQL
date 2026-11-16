@@ -1,16 +1,10 @@
 """Snake II, as on the Nokia 3310: the arrows steer, q leaves."""
-import asyncio
 import random
 
-from prompt_toolkit.application import Application
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Layout, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.styles import Style
+from mispql import lcd
 
 WIDTH, HEIGHT = 19, 9  # cells; the edges wrap
-CELL, MARGIN = 4, 2  # pixels; a character is one pixel wide and two high
-PW, PH = WIDTH * CELL + 2 * MARGIN, HEIGHT * CELL + 2 * MARGIN
+CELL, MARGIN = 4, 2  # pixels: the field and its border fill the screen
 TICK = 0.12  # seconds per move
 FOOD_POINTS = 5
 BONUS_EVERY = 5  # foods
@@ -24,11 +18,11 @@ CREATURES = (
     ('.######.', '##.##.##', '########', '#.#..#.#'),
     ('..##....', '.####.##', '########', '.#.#..#.'),
 )
-HALF = {(False, False): ' ', (True, False): '▀', (False, True): '▄', (True, True): '█'}
-STYLE = Style.from_dict({'lcd': 'bg:#c7f0d8 #43523d'})
 
 
 class Game:
+    title, notice = 'Snake II', None
+
     def __init__(self, rng=random):
         self.rng = rng
         self.snake = [(x, HEIGHT // 2) for x in range(6, 1, -1)]  # head first
@@ -87,37 +81,31 @@ class Game:
                 if not taken.intersection((x + i, y) for i in range(width))]
         return self.rng.choice(free) if free else None
 
+    def status(self):
+        return f' {self.score:04d}', f'{self.bonus_left:>3} ' if self.bonus else ''
 
-def field(game):
-    """The play field as lines of half-block characters, two pixel rows to a line."""
-    px = [[x in (0, PW - 1) or y in (0, PH - 1) for x in range(PW)] for y in range(PH)]
+    def draw(self, canvas):
+        for edge in ((0, 0, lcd.WIDTH, 1), (0, lcd.HEIGHT - 1, lcd.WIDTH, 1), (0, 0, 1, lcd.HEIGHT),
+                     (lcd.WIDTH - 1, 0, 1, lcd.HEIGHT)):
+            canvas.fill(*edge)
+        if self.food:
+            canvas.draw(*_origin(self.food), FOOD)
+        if self.bonus:
+            canvas.draw(*_origin(self.bonus[0]), CREATURES[self.bonus[1]])
+        canvas.draw(*_origin(self.snake[0]), _facing(HEAD, self.heading))
+        for i, (x, y) in enumerate(self.snake[1:], 1):
+            ox, oy = _origin((x, y))
+            canvas.fill(ox + 1, oy + 1, 2, 2)
+            for nx, ny in self.snake[i - 1:i + 2:2]:
+                dx, dy = (nx - x + 1) % WIDTH - 1, (ny - y + 1) % HEIGHT - 1
+                if dx:
+                    canvas.fill(ox + (3 if dx > 0 else 0), oy + 1, 1, 2)
+                else:
+                    canvas.fill(ox + 1, oy + (3 if dy > 0 else 0), 2, 1)
 
-    def fill(x, y, w, h):
-        for row in px[y:y + h]:
-            row[x:x + w] = [True] * w
 
-    def draw(cell, sprite):
-        ox, oy = MARGIN + CELL * cell[0], MARGIN + CELL * cell[1]
-        for dy, line in enumerate(sprite):
-            for dx, c in enumerate(line):
-                if c == '#':
-                    px[oy + dy][ox + dx] = True
-
-    if game.food:
-        draw(game.food, FOOD)
-    if game.bonus:
-        draw(game.bonus[0], CREATURES[game.bonus[1]])
-    draw(game.snake[0], _facing(HEAD, game.heading))
-    for i, (x, y) in enumerate(game.snake[1:], 1):
-        ox, oy = MARGIN + CELL * x, MARGIN + CELL * y
-        fill(ox + 1, oy + 1, 2, 2)
-        for nx, ny in game.snake[i - 1:i + 2:2]:
-            dx, dy = (nx - x + 1) % WIDTH - 1, (ny - y + 1) % HEIGHT - 1
-            if dx:
-                fill(ox + (3 if dx > 0 else 0), oy + 1, 1, 2)
-            else:
-                fill(ox + 1, oy + (3 if dy > 0 else 0), 2, 1)
-    return [''.join(HALF[pair] for pair in zip(px[y], px[y + 1])) for y in range(0, PH, 2)]
+def _origin(cell):
+    return MARGIN + CELL * cell[0], MARGIN + CELL * cell[1]
 
 
 def _facing(sprite, heading):
@@ -131,81 +119,7 @@ def _facing(sprite, heading):
     return sprite
 
 
-def screen(game, high, best, columns, rows):
-    """The whole screen, centred, as prompt_toolkit formatted text."""
-    if columns < PW or rows <= PH // 2:
-        return [('', f'Snake II needs a {PW}x{PH // 2 + 1} terminal. q leaves.')]
-    lines = field(game)
-    if game.over:
-        message = ['', 'Game over!', f'Score {game.score}',
-                   'New high score!' if best else f'High score {high}', '', 'space: again, q: leave', '']
-        width = max(map(len, message)) + 4
-        start, top = (PW - width) // 2, (len(lines) - len(message)) // 2
-        for k, text in enumerate(message):
-            line = lines[top + k]
-            lines[top + k] = line[:start] + text.center(width) + line[start + width:]
-    bonus = f'{game.bonus_left:>3} ' if game.bonus else ''
-    lines.insert(0, f' {game.score:04d}'.ljust(PW - len(bonus)) + bonus)
-    left = ' ' * ((columns - PW) // 2)
-    text = [('', '\n' * ((rows - len(lines)) // 2))]
-    for line in lines:
-        text += [('', left), ('class:lcd', line), ('', '\n')]
-    return text[:-1]
-
-
 def play(high_score_file):
     """Play full screen until q; the best score is kept in `high_score_file`."""
-    game = Game()
-    high = _read_high(high_score_file)
-    best = False
-
-    async def tick():
-        nonlocal high, best
-        while True:
-            await asyncio.sleep(TICK)
-            size = app.output.get_size()
-            if not game.over and size.columns >= PW and size.rows > PH // 2:
-                game.step()
-                if game.over and game.score > high:
-                    high, best = game.score, True
-                    _write_high(high_score_file, high)
-                app.invalidate()
-
-    keys = KeyBindings()
-    for key, direction in ('up', UP), ('down', DOWN), ('left', LEFT), ('right', RIGHT):
-        keys.add(key)(lambda event, direction=direction: game.turn(direction))
-
-    @keys.add('q')
-    @keys.add('Q')
-    @keys.add('c-c')
-    def leave(event):
-        event.app.exit()
-
-    @keys.add(' ')
-    def again(event):
-        nonlocal game, best
-        if game.over:
-            game, best = Game(), False
-
-    def text():
-        size = app.output.get_size()
-        return screen(game, high, best, size.columns, size.rows)
-
-    app = Application(layout=Layout(Window(FormattedTextControl(text, show_cursor=False))),
-                      key_bindings=keys, style=STYLE, full_screen=True)
-    app.run(pre_run=lambda: app.create_background_task(tick()))
-
-
-def _read_high(path):
-    try:
-        return int(path.read_text())
-    except (OSError, ValueError):
-        return 0
-
-
-def _write_high(path, score):
-    try:
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        path.write_text(f'{score}\n')
-    except OSError:
-        pass
+    turns = {'up': UP, 'down': DOWN, 'left': LEFT, 'right': RIGHT}
+    lcd.play(Game, {key: lambda game, d=d: game.turn(d) for key, d in turns.items()}, high_score_file, TICK)

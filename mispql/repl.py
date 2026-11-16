@@ -10,14 +10,14 @@ from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 
-from mispql import __version__, cli, config, snake
+from mispql import __version__, cli, config, snake, spaceimpact
 from mispql.client import Client, ClientError
 from mispql.connections import describe
 from mispql.errors import MispQLError
 from mispql.lexer import KEYWORDS, tokenize
 from mispql.tables import TABLES
 
-COMMANDS = ('quit', 'exit', 'help', 'snake2')
+COMMANDS = ('quit', 'exit', 'help', 'snake2', 'space impact')
 HELP = f"""\
 SELECT * | COUNT(*) | field, ... FROM table
   [WHERE condition] [ORDER BY field [ASC|DESC], ...] [LIMIT n [OFFSET n]] [FORMAT word];
@@ -59,7 +59,7 @@ def main(args):
             continue
         except EOFError:
             return cli.OK
-        command = text.strip().rstrip(';').strip().lower()
+        command = _command(text)
         if command in ('quit', 'exit'):
             return cli.OK
         if command == 'help':
@@ -68,6 +68,9 @@ def main(args):
         if command == 'snake2':
             snake.play(_state() / 'snake2')
             continue
+        if command == 'space impact':
+            spaceimpact.play(_state() / 'spaceimpact')
+            continue
         shown = connections.current
         try:
             cli.run(text, connections, args.dry_run, interactive=True)
@@ -75,6 +78,10 @@ def main(args):
             cli.stderr('interrupted')
         if connections.current != shown:
             completions.reset(Client(connections.client.settings))
+
+
+def _command(text):
+    return ' '.join(text.strip().rstrip(';').split()).lower()
 
 
 def prompt(connections):
@@ -96,8 +103,7 @@ def _where(connections, client):
 def complete(text):
     """Whether Enter runs `text` rather than starting a new line: it ends in ;, is a command,
     or cannot be lexed whatever follows (so its error shows)."""
-    stripped = text.strip()
-    if not stripped or stripped.rstrip(';').strip().lower() in COMMANDS:
+    if not text.strip() or _command(text) in COMMANDS:
         return True
     try:
         tokens = tokenize(text)

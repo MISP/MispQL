@@ -54,7 +54,7 @@ def session(monkeypatch, capsys):
 
 
 @pytest.mark.parametrize('text, runs', [
-    ('', True), ('  \n', True), ('quit', True), ('EXIT;', True), (' help ', True),
+    ('', True), ('  \n', True), ('quit', True), ('EXIT;', True), (' help ', True), ('Space  Impact', True),
     ('SELECT * FROM attributes LIMIT 1;', True),
     ('SELECT * FROM attributes LIMIT 1;  -- a note', True),
     ('SELECT * FROM attributes\nLIMIT 1', False),
@@ -94,6 +94,11 @@ def test_help_and_exit(misp, session):
 
 def test_snake2(misp, session):
     code, out, err = session('SNAKE2;\r\x1b[Aq' 'quit\r')
+    assert (code, err) == (0, '')
+
+
+def test_space_impact(misp, session):
+    code, out, err = session('SPACE  IMPACT;\r\x1b[A q' 'quit\r')
     assert (code, err) == (0, '')
 
 
