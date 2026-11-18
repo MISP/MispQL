@@ -11,7 +11,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 
-from mispql import repl
+from mispql import __version__, repl
 from mispql.cli import main
 from mispql.client import Client, ClientError
 
@@ -73,7 +73,7 @@ def test_statements_run_until_quit(misp, session):
     code, out, err = session('SELECT * FROM attributes\rLIMIT 1;\rSELECT id FROM attributes LIMIT 2\x1b\r'
                              'quit\rSELECT * FROM;\r')
     assert (code, err) == (0, '')
-    assert out.startswith(f'mispql 0.1.0, default: me@example.org, User, ORG at {misp.url}. End statements with ;')
+    assert out.startswith(f'mispql {__version__}, default: me@example.org, User, ORG at {misp.url}. End statements with ;')
     assert out.count(json.dumps(ROWS['response']['Attribute'], indent=2)) == 2
     assert [r['body']['limit'] for r in misp.requests[1:]] == [1, 2]
 
@@ -137,7 +137,7 @@ def test_history_is_private(misp, session, tmp_path):
 def test_dry_run_needs_no_config(session):
     code, out, err = session('DESCRIBE events;\r\x04', '--dry-run')
     assert (code, err) == (0, '')
-    assert out.startswith('mispql 0.1.0, dry run: nothing is sent.')
+    assert out.startswith(f'mispql {__version__}, dry run: nothing is sent.')
     assert 'GET /events/queryDescribe\n' in out
 
 
@@ -270,5 +270,5 @@ def test_banner_warns_when_misp_does_not_say_who(stub, session, monkeypatch):
     monkeypatch.setenv('MISPQL_KEY', 'the-key')
     stub.reply({'name': 'Authentication failed.'}, status=403)
     code, out, err = session('quit\r')
-    assert out.startswith(f'mispql 0.1.0, default at {stub.url}. End statements with ;')
+    assert out.startswith(f'mispql {__version__}, default at {stub.url}. End statements with ;')
     assert (code, err) == (0, 'WARNING: cannot tell who default is: key rejected\n')

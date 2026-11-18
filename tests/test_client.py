@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from mispql import __version__
 from mispql.client import Client, ClientError, QueryErrors
 from mispql.compiler import compile_statement
 from mispql.config import Settings
@@ -29,7 +30,7 @@ def test_search(stub):
     assert request['body'] == plan.body
     headers = request['headers']
     assert (headers['Authorization'], headers['Accept'], headers['Content-Type'], headers['User-Agent']) == (
-        'the-key', 'application/json', 'application/json', 'mispql/0.1.0')
+        'the-key', 'application/json', 'application/json', f'mispql/{__version__}')
 
 
 def test_rows_are_unwrapped(stub):
