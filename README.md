@@ -133,6 +133,14 @@ SELECT * FROM attributes WHERE type = domain LIMIT 10
   clusters; without it MISP answers 403.
 - Python 3.11 or later.
 
+A MISP without complex queries does not refuse a `WHERE`: it leaves the
+condition out and answers as if there were none, with every row or every event
+counted. So before the first statement with a `WHERE`, mispql asks MISP
+whether it runs them (`GET /attributes/queryDescribe`), once per database. When
+it does not answer with its tables, the statement stops with an error and is
+not sent: a 404 means that MISP does not support complex queries, a 403 that
+the key may not use them or that MISP does not support them.
+
 ## Install
 
 ```
@@ -415,6 +423,48 @@ SELECT * FROM events WHERE date >= '7d' LIMIT 50 FORMAT stix2;
 The guide, `site/guide.html`, covers every table with its fields, columns and
 sort fields, the output formats and the limits in detail. The full field
 reference is `docs/restsearch-complex-query.md` in the MISP repository.
+
+## As a Python library
+
+`import mispql` gives the compiler and the readers of MISP's replies without
+the command line. It sends nothing itself and needs only the standard library
+(`pip install --no-deps .` leaves out the command line's dependencies); the
+caller sends each request with its own session, keys and timeouts:
+
+```python
+import mispql
+
+[statement] = mispql.compile("SELECT COUNT(*) FROM events WHERE tags = 'tlp:red'")
+exchange = mispql.Exchange(statement.plan)
+while not exchange.done:
+    request = exchange.request  # method, path after the MISP URL, JSON body
+    response = session.request(request.method, url + request.path, json=request.body)
+    exchange.receive(response.status_code, response.headers, response.content)
+print(exchange.result)
+```
+
+- `compile(text, flatten=False)` checks every statement and raises
+  `MispQLError` at the first mistake, with offsets into the text
+  (`render(text)` draws the caret). Each `Statement` holds its syntax tree
+  (`node`), its offsets and its `plan`. With `flatten=True`, events are fetched
+  without their attributes, objects and reports, for a caller that flattens the
+  rows.
+- `Exchange(plan)` asks for the requests a plan needs, one at a time: the next
+  page for an `OFFSET` that is not a multiple of `LIMIT`, every discovery
+  endpoint for `SHOW TABLES`. Its result is what the command line prints from:
+  a count, a list of rows, a table's fields and the limits, the tables
+  answering, or for MISP's own formats the body as received.
+- A plan with a `WHERE` first asks `SUPPORT_CHECK`, and anything but a list of
+  tables raises `NoComplexQueries`, whose `status` is that answer's.
+  `Exchange(plan, check_support=False)` leaves the check out, for a caller that
+  has just made it with `check_support(status, body)`.
+- MISP's refusals raise `QueryErrors`, a 400 listing what is wrong
+  (`located(plan, statement)` places each error on the text), or `ClientError`,
+  with the HTTP `status`.
+- `flatten(row)` gives a row as the `table` and `flat` formats see it; `TABLES`
+  holds each table's endpoints, default columns, sort names and aliases.
+- `USE`, `SHOW DATABASES` and `WHOAMI` are about the command line's
+  connections: `Exchange` does not take their plans.
 
 ## Development
 
