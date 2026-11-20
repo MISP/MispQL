@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from mispql import nodes
 from mispql.errors import MispQLError
+from mispql.parser import parse
 from mispql.tables import TABLES, names
 
 # Rendered by the tool from the JSON reply. Any other FORMAT word is MISP's returnFormat.
@@ -69,7 +70,30 @@ class WhoamiPlan(Plan):
     pass
 
 
-def compile_statement(statement):
+@dataclass(frozen=True)
+class Statement:
+    """A statement of the text: its syntax tree, whose nodes hold their offsets, and its plan."""
+    node: nodes.Node
+    plan: Plan
+
+    @property
+    def start(self):
+        return self.node.start
+
+    @property
+    def end(self):
+        return self.node.end
+
+
+def compile(text, flatten=False):
+    """Every statement of `text`, compiled; MispQLError at the first mistake.
+
+    flatten: the caller flattens the rows it gets (as FORMAT table and flat do), so events
+    are fetched without their attributes, objects and reports, which flattening drops."""
+    return [Statement(node, compile_statement(node, flatten)) for node in parse(text)]
+
+
+def compile_statement(statement, flatten=False):
     if isinstance(statement, nodes.ShowTables):
         return ShowTablesPlan(endpoints={name: table.discovery for name, table in TABLES.items()})
     if isinstance(statement, nodes.ShowDatabases):
@@ -81,7 +105,7 @@ def compile_statement(statement):
     if isinstance(statement, nodes.Describe):
         table = _table(statement.table)
         return DescribePlan(table=table.name, endpoint=table.discovery)
-    return _Select(statement).plan()
+    return _Select(statement, flatten).plan()
 
 
 def _table(name):
@@ -96,8 +120,9 @@ def _parent(path):
 
 
 class _Select:
-    def __init__(self, stmt):
+    def __init__(self, stmt, flatten):
         self.stmt = stmt
+        self.flatten = flatten
         self.table = _table(stmt.table)
         self.spans = {}
 
@@ -123,7 +148,8 @@ class _Select:
                 f'a column list needs FORMAT table, FORMAT flat or no FORMAT: '
                 f'FORMAT {verbatim} is printed as MISP sends it', stmt.format.start, stmt.format.end)
         body = {'returnFormat': verbatim or 'json'}
-        if self.table.metadata and (columns or output in RENDERINGS):
+        flattened = columns or output in RENDERINGS or (self.flatten and output == 'default')
+        if self.table.metadata and flattened:
             body['metadata'] = 1
         if limit:
             body.update(limit=limit, page=page)

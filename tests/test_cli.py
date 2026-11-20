@@ -11,6 +11,8 @@ from mispql.cli import main
 from mispql.client import Client
 
 ROWS = {'response': {'Attribute': [{'id': '1', 'type': 'md5'}]}}
+# The attributes table's fields: a MISP that runs complex queries, so a WHERE may be sent.
+SUPPORTED = {'tables': {'attributes': {'fields': {'id': {'type': 'int'}}}}, 'limits': {}}
 pytestmark = pytest.mark.usefixtures('no_config')
 
 
@@ -57,11 +59,14 @@ def test_module_entry_point():
 
 def test_statements_run_in_order(misp, run):
     misp.reply(ROWS)
+    misp.reply(SUPPORTED)
     misp.reply(b'42')
     code, out, err = run('-e', "SELECT * FROM attributes LIMIT 1; SELECT COUNT(*) FROM attributes WHERE id > 0")
     assert (code, err) == (0, '')
     assert out == json.dumps(ROWS['response']['Attribute'], indent=2) + '\n42\n'
-    assert [r['body'].get('returnFormat') for r in misp.requests] == ['json', 'count']
+    assert [(r['method'], r['path'], (r['body'] or {}).get('returnFormat')) for r in misp.requests] == [
+        ('POST', '/attributes/restSearch', 'json'), ('GET', '/attributes/queryDescribe', None),
+        ('POST', '/attributes/restSearch', 'count')]
 
 
 @pytest.mark.parametrize('how', ['file', 'dash', 'pipe', 'terminal'])
@@ -138,6 +143,7 @@ def test_query_errors_stop_the_script(misp, run):
     text = ('SELECT * FROM attributes LIMIT 1;\nSELECT * FROM attributes\n  WHERE nosuch = 1 LIMIT 1;\n'
             'SELECT * FROM attributes LIMIT 1')
     misp.reply(ROWS)
+    misp.reply(SUPPORTED)
     misp.reply({'errors': [{'path': 'query.<unknown>', 'message': 'unknown field'},
                            {'path': 'limit', 'message': 'too big'}]}, status=400)
     code, out, err = run('-e', text)
@@ -147,7 +153,19 @@ def test_query_errors_stop_the_script(misp, run):
         'ERROR 3:9: unknown field\n  WHERE nosuch = 1 LIMIT 1;\n        ^^^^^^\n'
         'ERROR 2:1: too big\nSELECT * FROM attributes\n^^^^^^^^^^^^^^^^^^^^^^^^\n'
     )
-    assert len(misp.requests) == 2
+    assert len(misp.requests) == 3
+
+
+def test_a_misp_without_complex_queries_stops_the_script_before_the_where(misp, run):
+    misp.reply(ROWS)
+    misp.reply({'name': 'Not Found', 'message': 'Not Found', 'url': '/attributes/queryDescribe'}, status=404)
+    code, out, err = run('-e', 'SELECT * FROM attributes LIMIT 1;\nSELECT COUNT(*) FROM events WHERE id = -1;\n'
+                               'SELECT * FROM attributes LIMIT 1')
+    assert (code, json.loads(out)) == (1, ROWS['response']['Attribute'])
+    assert err == ('ERROR 2:1: this MISP does not support complex queries: it would ignore the WHERE and answer '
+                   'as if there were none (/attributes/queryDescribe: HTTP 404: Not Found)\n')
+    assert [(r['method'], r['path']) for r in misp.requests] == [('POST', '/attributes/restSearch'),
+                                                                 ('GET', '/attributes/queryDescribe')]
 
 
 def test_client_error_names_the_statement(misp, run):

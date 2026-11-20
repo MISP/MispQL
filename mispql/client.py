@@ -2,36 +2,12 @@
 import requests
 
 from mispql import __version__
-from mispql.compiler import CountPlan, DescribePlan, ShowTablesPlan
-from mispql.errors import MispQLError
-from mispql.tables import TABLES
+from mispql.compiler import DescribePlan, SearchPlan
+from mispql.replies import (SUPPORT_CHECK, ClientError, Exchange, QueryErrors,  # noqa: F401
+                            check_support, failure, sends_query)
 
 CONNECT_TIMEOUT = 10
 WHOAMI = '/users/view/me'
-
-
-class ClientError(Exception):
-    """MISP could not be reached, refused the request or answered in an unexpected shape."""
-
-    def __init__(self, message, status=None):
-        super().__init__(message)
-        self.status = status  # the HTTP status MISP answered with; None if it did not answer
-
-
-class QueryErrors(Exception):
-    """A 400 listing what is wrong with the query, as paths into the request body."""
-
-    def __init__(self, errors):
-        super().__init__('; '.join(f'{e.get("path")}: {e.get("message")}' for e in errors))
-        self.errors = errors
-
-    def located(self, plan, statement):
-        """The errors as MispQLErrors on the statement text; the whole statement where a path is unknown."""
-        located = []
-        for error in self.errors:
-            start, end = plan.locate(str(error.get('path', ''))) or (statement.start, statement.end)
-            located.append(MispQLError(str(error.get('message', 'invalid query')), start, end))
-        return located
 
 
 class Client:
@@ -47,68 +23,35 @@ class Client:
             'User-Agent': f'mispql/{__version__}',
         })
         self.session.verify = settings.verify_ssl
+        self.supports_queries = False  # MISP answered SUPPORT_CHECK with its tables
 
     def run(self, plan):
         """A count, the rows of a search, for MISP's own formats the unread response; for
-        DESCRIBE the table's fields and the limits, for SHOW TABLES the tables answering."""
-        if isinstance(plan, DescribePlan):
-            return self.describe(plan.table, plan.endpoint)
-        if isinstance(plan, ShowTablesPlan):
-            return self.tables(plan.endpoints)
-        if isinstance(plan, CountPlan):
-            response = self.post(plan.endpoint, plan.body)
-            text = response.headers.get('X-Result-Count') if plan.source == 'header' else response.text
-            try:
-                return int(text.strip())
-            except (AttributeError, ValueError):
-                raise ClientError(f'{plan.endpoint}: no count in the answer') from None
-        if plan.output == 'verbatim':
-            return self.post(plan.endpoint, plan.body, stream=True)
-        rows = self.rows(plan, plan.body)
-        if plan.skip:
-            limit = plan.body['limit']
-            if len(rows) == limit:
-                rows += self.rows(plan, {**plan.body, 'page': plan.body['page'] + 1})
-            rows = rows[plan.skip:plan.skip + limit]
-        return rows
+        DESCRIBE the table's fields and the limits, for SHOW TABLES the tables answering.
+        A statement with a WHERE is sent only to a MISP that runs complex queries."""
+        if sends_query(plan):
+            self.check_support()
+        if isinstance(plan, SearchPlan) and plan.output == 'verbatim':
+            return self.send('POST', plan.endpoint, plan.body, stream=True)
+        exchange = Exchange(plan, check_support=False)
+        while not exchange.done:
+            request = exchange.request
+            response = self.request(request.method, request.path, request.body)
+            exchange.receive(response.status_code, response.headers, response.content)
+        return exchange.result
 
-    def rows(self, plan, body):
-        response = self.post(plan.endpoint, body)
-        key = TABLES[plan.table].row_key
-        try:
-            found = response.json()['response']
-            # {"response": {"Attribute": [...]}}, {"response": [{"Event": {...}}, ...]}
-            if isinstance(found, dict):
-                return found[key]
-            # Keys beside the row's own ({"Collection": {...}, "Orgc": {...}}) join the row.
-            return [{**item[key], **{k: v for k, v in item.items() if k != key and k not in item[key]}}
-                    for item in found]
-        except (ValueError, KeyError, TypeError):
-            raise ClientError(f'{plan.endpoint}: unexpected answer') from None
+    def check_support(self):
+        """NoComplexQueries unless this MISP runs complex queries; asked once per client.
+
+        A MISP without them drops a search's WHERE without a word and answers as if there
+        were none."""
+        if not self.supports_queries:
+            response = self.request(SUPPORT_CHECK.method, SUPPORT_CHECK.path)
+            check_support(response.status_code, response.content)
+            self.supports_queries = True
 
     def describe(self, table, endpoint):
-        try:
-            found = self.send('GET', endpoint).json()
-            entry = found['tables'][table]
-            return {'fields': dict(entry['fields']), 'limits': dict(found['limits'])}
-        except (ValueError, KeyError, TypeError):
-            raise ClientError(f'{endpoint}: unexpected answer') from None
-
-    def tables(self, endpoints):
-        """The tables whose discovery endpoint answers; MISP's first error if none does."""
-        found, first_error = [], None
-        for table, endpoint in endpoints.items():
-            try:
-                self.send('GET', endpoint)
-            except ClientError as e:
-                if e.status is None:
-                    raise
-                first_error = first_error or e
-                continue
-            found.append(table)
-        if not found and first_error:
-            raise first_error
-        return found
+        return self.run(DescribePlan(table=table, endpoint=endpoint))
 
     def whoami(self):
         """The email, role and organisation of the key's user, as MISP reports them."""
@@ -119,16 +62,21 @@ class Client:
         except (ValueError, KeyError, TypeError):
             raise ClientError(f'{WHOAMI}: unexpected answer') from None
 
-    def post(self, endpoint, body, stream=False):
-        return self.send('POST', endpoint, body, stream)
-
     def send(self, method, endpoint, body=None, stream=False):
+        """MISP's response to a request it accepted; ClientError or QueryErrors otherwise."""
+        response = self.request(method, endpoint, body, stream)
+        if response.status_code != 200:
+            raise failure(response.status_code, response.content)
+        return response
+
+    def request(self, method, endpoint, body=None, stream=False):
+        """MISP's response, whatever its status; ClientError when there is none."""
         url = self.settings.url.rstrip('/') + endpoint
         if self.trace:
             self.trace(method, url, body)
         try:
-            response = self.session.request(method, url, json=body, stream=stream,
-                                            timeout=(CONNECT_TIMEOUT, self.settings.timeout))
+            return self.session.request(method, url, json=body, stream=stream,
+                                        timeout=(CONNECT_TIMEOUT, self.settings.timeout))
         except requests.exceptions.SSLError as e:
             raise ClientError(f'TLS failed for {url}: {e}') from None
         except requests.exceptions.ConnectTimeout:
@@ -139,9 +87,6 @@ class Client:
             raise ClientError(f'cannot reach {url}') from None
         except requests.exceptions.RequestException as e:
             raise ClientError(f'{url}: {e}') from None
-        if response.status_code != 200:
-            raise _failure(response)
-        return response
 
 
 def chunks(response, size=65536):
@@ -150,17 +95,3 @@ def chunks(response, size=65536):
         yield from response.iter_content(size)
     except requests.exceptions.RequestException as e:
         raise ClientError(f'{response.url}: the answer broke off: {e}') from None
-
-
-def _failure(response):
-    try:
-        reply = response.json()
-    except ValueError:
-        reply = None
-    status = response.status_code
-    if not isinstance(reply, dict):
-        return ClientError(f'HTTP {status}', status)
-    if status == 400 and isinstance(reply.get('errors'), list) and reply['errors']:
-        return QueryErrors(reply['errors'])
-    message = reply.get('message') or reply.get('name')
-    return ClientError(f'HTTP {status}: {message}' if message else f'HTTP {status}', status)

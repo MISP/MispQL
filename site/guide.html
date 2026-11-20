@@ -103,6 +103,13 @@ your user is allowed to see, never widen it.</p>
   answers 403.</li>
   <li>Python 3.11 or later on the machine running mispql.</li>
 </ul>
+<p>A MISP without complex queries does not refuse a <code>WHERE</code>: it leaves the condition
+out and answers as if there were none, with every row or every event counted. So before the
+first statement with a <code>WHERE</code>, mispql asks MISP whether it runs them
+(<code>GET /attributes/queryDescribe</code>), once per database. When it does not answer with
+its tables, the statement stops with an error and is not sent: a 404 means that MISP does not
+support complex queries, a 403 that the key may not use them or that MISP does not support
+them.</p>
 
 <h3 id="install">Install</h3>
 <p>From a checkout of the mispql repository:</p>

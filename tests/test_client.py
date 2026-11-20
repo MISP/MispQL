@@ -6,6 +6,7 @@ import pytest
 
 from mispql import __version__
 from mispql.client import Client, ClientError, QueryErrors
+from mispql.replies import NoComplexQueries
 from mispql.compiler import compile_statement
 from mispql.config import Settings
 from mispql.parser import parse
@@ -13,8 +14,11 @@ from mispql.parser import parse
 SERVER_ERRORS = Path(__file__).parent / 'server_errors'
 
 
-def client(url, **settings):
-    return Client(Settings(url=url, key='the-key', **settings))
+def client(url, checked=True, **settings):
+    """checked: MISP has already shown this client that it runs complex queries."""
+    c = Client(Settings(url=url, key='the-key', **settings))
+    c.supports_queries = checked
+    return c
 
 
 def plan_of(text):
@@ -277,3 +281,53 @@ def test_settings_reach_the_session():
     assert c.session.verify == '/etc/ca.pem'
     with pytest.raises(ClientError, match='no API key'):
         Client(Settings(url='https://misp'))
+
+
+NOT_FOUND = {'name': 'Not Found', 'message': 'Not Found', 'url': '/attributes/queryDescribe'}
+SUPPORT_CHECK = ('GET', '/attributes/queryDescribe')
+
+
+def test_a_where_waits_for_misp_to_list_its_tables_once_per_client(stub):
+    stub.reply(DISCOVERY)
+    stub.reply(b'4')
+    stub.reply(b'uuid,value\n', headers={'Content-Type': 'text/csv'})
+    stub.reply({'response': []})
+    c = client(stub.url, checked=False)
+    assert c.run(plan_of('SELECT COUNT(*) FROM attributes WHERE id > 0')) == 4
+    response = c.run(plan_of("SELECT * FROM attributes WHERE type = 'md5' LIMIT 5 FORMAT csv"))
+    assert b''.join(response.iter_content()) == b'uuid,value\n'
+    assert c.run(plan_of('SELECT * FROM events WHERE id = 1')) == []
+    assert [(r['method'], r['path']) for r in stub.requests] == [
+        SUPPORT_CHECK, ('POST', '/attributes/restSearch'), ('POST', '/attributes/restSearch'),
+        ('POST', '/events/restSearch')]
+
+
+@pytest.mark.parametrize('text', ['SELECT COUNT(*) FROM events WHERE id = -1',
+                                  'SELECT * FROM attributes WHERE id = -1 LIMIT 5 FORMAT csv'])
+def test_a_misp_without_complex_queries_gets_no_where(stub, text):
+    """Such a MISP drops the WHERE without a word: the count would be every event's."""
+    stub.reply(NOT_FOUND, status=404)
+    stub.reply(NOT_FOUND, status=404)
+    stub.reply(DISCOVERY)
+    stub.reply(b'0', headers={'X-Result-Count': '0'})
+    c = client(stub.url, checked=False)
+    with pytest.raises(NoComplexQueries) as exc:
+        c.run(plan_of(text))
+    assert exc.value.status == 404
+    assert str(exc.value).startswith('this MISP does not support complex queries')
+    with pytest.raises(NoComplexQueries):
+        c.run(plan_of(text))
+    # A refusal is not remembered: the same client asks again, and goes on once MISP lists its tables.
+    c.run(plan_of(text))
+    assert [(r['method'], r['path']) for r in stub.requests] == [SUPPORT_CHECK] * 3 + [
+        ('POST', plan_of(text).endpoint)]
+
+
+def test_no_check_without_a_where(stub):
+    stub.reply({'response': []})
+    stub.reply(DISCOVERY)
+    c = client(stub.url, checked=False)
+    c.run(plan_of('SELECT * FROM events ORDER BY id LIMIT 1'))
+    c.run(plan_of('DESCRIBE events'))
+    assert [(r['method'], r['path']) for r in stub.requests] == [('POST', '/events/restSearch'),
+                                                                 ('GET', '/events/queryDescribe')]

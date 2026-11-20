@@ -5,6 +5,7 @@ import json
 
 from mispql.client import chunks
 from mispql.compiler import CountPlan, DescribePlan, ShowDatabasesPlan, ShowTablesPlan, WhoamiPlan
+from mispql.replies import flatten
 from mispql.tables import TABLES
 
 CELL_WIDTH = 60
@@ -35,24 +36,6 @@ def write(plan, result, out):
         return renderer(plan, result, text)
     finally:
         text.detach()
-
-
-def flatten(row, prefix=''):
-    """Nested objects as dotted keys, Tag as a list of names; other lists are left out."""
-    flat = {}
-    for key, value in row.items():
-        name = prefix + key
-        if isinstance(value, dict):
-            flat.update(flatten(value, f'{name}.'))
-        elif isinstance(value, list):
-            if key == 'Tag':
-                flat[name] = [tag.get('name') for tag in value if isinstance(tag, dict)]
-            elif value and not any(isinstance(item, (dict, list)) for item in value):
-                flat[name] = value
-            # Attribute, Object, Galaxy, ...: an event can hold a million of them.
-        else:
-            flat[name] = value
-    return flat
 
 
 def _columns(flat_rows, wanted):
