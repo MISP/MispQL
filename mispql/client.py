@@ -4,7 +4,7 @@ import requests
 from mispql import __version__
 from mispql.compiler import DescribePlan, SearchPlan
 from mispql.replies import (SUPPORT_CHECK, ClientError, Exchange, QueryErrors,  # noqa: F401
-                            check_page_limit, check_support, failure, sends_query)
+                            check_page_limit, check_support, dropped_warning, failure, sends_query)
 
 CONNECT_TIMEOUT = 10
 WHOAMI = '/users/view/me'
@@ -35,11 +35,12 @@ class Client:
         if isinstance(plan, SearchPlan) and plan.output == 'verbatim':
             response = self.send('POST', plan.endpoint, plan.body, stream=True)
             try:
-                warning = check_page_limit(plan, response.headers)
+                warnings = [check_page_limit(plan, response.headers)]
             except ClientError:
                 response.close()
                 raise
-            if warning:
+            warnings.append(dropped_warning(plan, response.headers))
+            for warning in filter(None, warnings):
                 self.warn(warning)
             return response
         exchange = Exchange(plan, check_support=False)

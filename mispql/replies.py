@@ -116,7 +116,7 @@ class Exchange:
     the tables answering. `receive` raises QueryErrors for a 400 listing what is wrong with
     the query, and ClientError when MISP refused a request or answered in an unexpected
     shape. `warnings` says what the result may lack: MISP capped a search's page size for
-    the key's role.
+    the key's role, or left out rows it had found.
 
     A plan with a WHERE first asks SUPPORT_CHECK, and goes on only when MISP lists its
     tables (NoComplexQueries otherwise): a MISP without complex queries would ignore the
@@ -131,7 +131,7 @@ class Exchange:
         self.request = None  # the request to send next; None once the result is known
         self.done = False
         self.result = None
-        self.warnings = []  # about the result: MISP capped the page size for the key's role
+        self.warnings = []  # about the result: a page capped for the key's role, rows left out
         self.supported = False  # MISP answered SUPPORT_CHECK with its tables
         self._steps = self._exchange(plan, check_support)
         self.request = next(self._steps)
@@ -161,19 +161,23 @@ class Exchange:
         _accepted(reply)
         if warning := check_page_limit(plan, reply.headers):
             self.warnings.append(warning)
+        pages = [reply.headers]
         if plan.output == 'verbatim':
-            return reply.body
-        rows = _rows(plan, reply)
-        if plan.skip:
-            limit = plan.body['limit']
-            if len(rows) == limit:
-                body = {**plan.body, 'page': plan.body['page'] + 1}
-                reply = yield Request('POST', plan.endpoint, body)
-                _accepted(reply)
-                check_page_limit(plan, reply.headers)
-                rows += _rows(plan, reply)
-            rows = rows[plan.skip:plan.skip + limit]
-        return rows
+            result = reply.body
+        else:
+            result = _rows(plan, reply)
+            if plan.skip:
+                if len(result) == plan.body['limit']:
+                    body = {**plan.body, 'page': plan.body['page'] + 1}
+                    reply = yield Request('POST', plan.endpoint, body)
+                    _accepted(reply)
+                    check_page_limit(plan, reply.headers)
+                    pages.append(reply.headers)
+                    result += _rows(plan, reply)
+                result = result[plan.skip:plan.skip + plan.body['limit']]
+        if warning := dropped_warning(plan, *pages):
+            self.warnings.append(warning)
+        return result
 
 
 @dataclass(frozen=True)
@@ -246,6 +250,26 @@ def _text(body):
 def _header(headers, name):
     name = name.lower()
     return next((value for key, value in headers.items() if key.lower() == name), None)
+
+
+def _int_header(headers, name):
+    try:
+        return int(_header(headers, name))
+    except (TypeError, ValueError):
+        return None
+
+
+def dropped_warning(plan, *headers):
+    """A warning when MISP read rows for the pages with these headers and then left them out,
+    None when it did not."""
+    if not TABLES[plan.table].filtered_after_read:
+        return None
+    count = sum(max(_int_header(page, 'X-Skipped-Elements-Count') or 0, 0) for page in headers)
+    if not count:
+        return None
+    rows = f'{count} matching row' if count == 1 else f'{count} matching rows'
+    pages = '; a page can hold fewer rows than LIMIT' if plan.body.get('limit') else ''
+    return f'MISP left out {rows} (warninglists, decaying or proposal blocking){pages}'
 
 
 def check_page_limit(plan, headers):

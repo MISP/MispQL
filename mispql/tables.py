@@ -17,6 +17,9 @@ class Table:
     # Rows the tool flattens are fetched with metadata: 1. It leaves out only lists of
     # records (an event's attributes, objects, reports), which flattening drops anyway.
     metadata: bool = False
+    # MISP leaves rows out after reading them (warninglists, decaying, proposal blocking) and
+    # counts them in X-Skipped-Elements-Count.
+    filtered_after_read: bool = False
     path: str = '/{name}/{action}'  # the endpoints, action being restSearch or queryDescribe
 
     @property
@@ -41,6 +44,7 @@ TABLES = {table.name: table for table in (
         },
         columns=('id', 'event_id', 'category', 'type', 'value', 'to_ids', 'timestamp', 'Tag'),
         count='body',
+        filtered_after_read=True,
         aliases={
             'eventinfo': 'Event.info', 'org': 'Event.Orgc.name', 'tags': 'Tag',
             'event_timestamp': 'Event.timestamp', 'publish_timestamp': 'Event.publish_timestamp',

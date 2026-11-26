@@ -161,6 +161,17 @@ def test_a_capped_first_page_is_returned_with_a_warning(stub):
     assert len(warnings) == 2
 
 
+def test_rows_misp_left_out_are_warned_about(stub):
+    warnings = []
+    c = Client(Settings(url=stub.url, key='the-key'), warn=warnings.append)
+    stub.reply({'response': {'Attribute': [{'id': '1'}]}}, headers={'X-Skipped-Elements-Count': '2'})
+    stub.reply(b'id\n1\n', headers={'Content-Type': 'text/csv', 'X-Skipped-Elements-Count': '2'})
+    c.run(plan_of('SELECT * FROM attributes LIMIT 3'))
+    c.run(plan_of('SELECT * FROM attributes LIMIT 3 FORMAT csv'))
+    assert warnings == ['MISP left out 2 matching rows (warninglists, decaying or proposal blocking); '
+                        'a page can hold fewer rows than LIMIT'] * 2
+
+
 def test_counts(stub):
     stub.reply({'response': [{'Event': {'id': '1'}}]}, headers={'X-Result-Count': '6375'})
     stub.reply(b'73890')

@@ -146,6 +146,43 @@ def test_unaligned_offset_asks_for_the_next_page_when_the_first_is_full():
     assert (short.done, short.result) == (True, [{'id': 4, 'Orgc': {'name': 'CIRCL'}}])
 
 
+DROPPED = 'MISP left out {} (warninglists, decaying or proposal blocking)'
+
+
+def attributes(*ids):
+    return as_json({'response': {'Attribute': [{'id': i} for i in ids]}})
+
+
+def test_rows_misp_left_out_are_counted_over_both_pages_of_an_unaligned_offset():
+    plan = plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 4')
+    exchange = Exchange(plan)
+    converse(exchange, ok(attributes(3, 4, 5), {'X-Skipped-Elements-Count': '1'}),
+             ok(attributes(7, 8), {'X-Skipped-Elements-Count': '1'}))
+    assert exchange.result == [{'id': 4}, {'id': 5}, {'id': 7}]
+    assert exchange.warnings == [DROPPED.format('2 matching rows') + '; a page can hold fewer rows than LIMIT']
+    short = Exchange(plan)
+    converse(short, ok(attributes(3, 5), {'X-Result-Count': '4', 'X-Skipped-Elements-Count': '1'}))
+    assert (short.done, short.result) == (True, [{'id': 5}])
+    assert short.warnings == [DROPPED.format('1 matching row') + '; a page can hold fewer rows than LIMIT']
+
+
+def test_only_attributes_count_the_rows_misp_left_out():
+    exchange = Exchange(plan_of('SELECT * FROM events LIMIT 3'))
+    converse(exchange, ok(as_json({'response': [{'Event': {'id': 3}}]}), {'X-Skipped-Elements-Count': '1'}))
+    assert (exchange.result, exchange.warnings) == ([{'id': 3}], [])
+
+
+@pytest.mark.parametrize('text, body, warning', [
+    ('SELECT * FROM attributes LIMIT 3 FORMAT csv', b'id\n1\n',
+     DROPPED.format('2 matching rows') + '; a page can hold fewer rows than LIMIT'),
+    ('SELECT * FROM attributes WHERE id > 0', attributes(1), DROPPED.format('2 matching rows')),
+])
+def test_rows_misp_left_out_are_warned_about(text, body, warning):
+    exchange = Exchange(plan_of(text), check_support=False)
+    converse(exchange, ok(body, {'X-Skipped-Elements-Count': '2'}))
+    assert exchange.warnings == [warning]
+
+
 @pytest.mark.parametrize('offset, format', [(1, ''), (3, ''), (3, 'FORMAT csv')])
 def test_offset_rejects_a_server_page_limit_that_changes_the_slice(offset, format):
     plan = plan_of(f'SELECT * FROM attributes LIMIT 3 OFFSET {offset} {format}')

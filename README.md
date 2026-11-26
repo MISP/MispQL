@@ -350,6 +350,9 @@ WHOAMI;
   returns the first page with a warning, and rejects queries with a positive
   `OFFSET` because the cap changes the meaning of the page. Use the reported
   limit or a smaller one.
+- MISP can leave attributes out after finding them: warninglists, decaying or
+  proposal blocking, for instance from the user's default search settings.
+  MispQL then warns that a page can hold fewer rows than `LIMIT`.
 
 ## Output formats
 
@@ -459,7 +462,7 @@ print(exchange.result)
   endpoint for `SHOW TABLES`. Its result is what the command line prints from:
   a count, a list of rows, a table's fields and the limits, the tables
   answering, or for MISP's own formats the body as received. Its `warnings`
-  say when MISP capped the page size for the key's role.
+  say when MISP capped the page size for the key's role or left attributes out.
 - A plan with a `WHERE` first asks `SUPPORT_CHECK`, and anything but a list of
   tables raises `NoComplexQueries`, whose `status` is that answer's.
   `Exchange(plan, check_support=False)` leaves the check out, for a caller that
