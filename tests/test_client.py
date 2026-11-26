@@ -141,7 +141,7 @@ def test_verbatim_offset_does_not_stream_the_wrong_page(stub, monkeypatch):
     close = requests.Response.close
     monkeypatch.setattr(requests.Response, 'close', lambda self: (closed.append(self.url), close(self)))
     stub.reply(b'uuid,value\n', headers={'Content-Type': 'text/csv', 'X-Result-Page-Limit': '2'})
-    with pytest.raises(ClientError, match=r'MISP applied LIMIT 2 instead of 3'):
+    with pytest.raises(ClientError, match=r"role allows at most 2 rows per request \(LIMIT 3 asked\)"):
         client(stub.url).run(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 3 FORMAT csv'))
     assert closed == [f'{stub.url}/attributes/restSearch']
 

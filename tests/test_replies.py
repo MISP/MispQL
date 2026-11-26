@@ -150,7 +150,8 @@ def test_unaligned_offset_asks_for_the_next_page_when_the_first_is_full():
 def test_offset_rejects_a_server_page_limit_that_changes_the_slice(offset, format):
     plan = plan_of(f'SELECT * FROM attributes LIMIT 3 OFFSET {offset} {format}')
     exchange = Exchange(plan)
-    with pytest.raises(ClientError, match=r'MISP applied LIMIT 2 instead of 3'):
+    with pytest.raises(ClientError, match=r"^/attributes/restSearch: this key's role allows at most 2 rows "
+                                          r'per request \(LIMIT 3 asked\); use LIMIT 2 or smaller with OFFSET$'):
         converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'x-result-page-limit': '2'}))
     assert exchange.result is None
 

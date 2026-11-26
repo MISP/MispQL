@@ -260,8 +260,8 @@ def check_page_limit(plan, headers):
     if applied <= 0:
         raise ClientError(f'{plan.endpoint}: invalid X-Result-Page-Limit')
     if applied != requested:
-        raise ClientError(f'{plan.endpoint}: MISP applied LIMIT {applied} instead of {requested}; '
-                          f'use LIMIT {applied} or smaller with OFFSET')
+        raise ClientError(f"{plan.endpoint}: this key's role allows at most {applied} rows per request "
+                          f'(LIMIT {requested} asked); use LIMIT {applied} or smaller with OFFSET')
 
 
 def flatten(row, prefix=''):
