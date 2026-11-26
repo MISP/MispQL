@@ -210,12 +210,15 @@ class _Select:
             if not table.sortable:
                 raise MispQLError(f'{table.name} cannot be sorted', item.start, item.end)
             name = self.field(item.field)
-            if name not in table.sortable:
+            sort_name = table.sortable.get(name)
+            if sort_name is None:
+                sort_name = next((field for field in table.sortable.values() if name in (field, field.lower())), None)
+            if sort_name is None:
                 raise MispQLError(
                     f'cannot sort {table.name} by {name}; use {", ".join(table.sortable)}',
                     item.field.start, item.field.end)
             self.spans[f'order[{i}]'] = (item.start, item.end)
-            rules.append(f'{table.sortable[name]} {"desc" if item.descending else "asc"}')
+            rules.append(f'{sort_name} {"desc" if item.descending else "asc"}')
         return rules
 
     def paging(self, verbatim):

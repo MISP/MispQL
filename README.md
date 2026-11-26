@@ -345,6 +345,10 @@ WHOAMI;
 - The server limits the size of a condition: by default 5 levels of nesting,
   50 conditions and operators, 100 values in one `IN`. `DESCRIBE` shows the
   limits in effect.
+- MISP can cap the number of rows per request by role. When MISP reports a
+  cap below the requested `LIMIT`, MispQL rejects queries with a positive
+  `OFFSET` because the cap changes the meaning of the page. Use the reported
+  limit or a smaller one.
 
 ## Output formats
 

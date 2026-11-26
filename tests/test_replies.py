@@ -146,6 +146,21 @@ def test_unaligned_offset_asks_for_the_next_page_when_the_first_is_full():
     assert (short.done, short.result) == (True, [{'id': 4, 'Orgc': {'name': 'CIRCL'}}])
 
 
+@pytest.mark.parametrize('offset, format', [(1, ''), (3, ''), (3, 'FORMAT csv')])
+def test_offset_rejects_a_server_page_limit_that_changes_the_slice(offset, format):
+    plan = plan_of(f'SELECT * FROM attributes LIMIT 3 OFFSET {offset} {format}')
+    exchange = Exchange(plan)
+    with pytest.raises(ClientError, match=r'MISP applied LIMIT 2 instead of 3'):
+        converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'x-result-page-limit': '2'}))
+    assert exchange.result is None
+
+
+def test_first_page_can_use_a_smaller_server_limit():
+    exchange = Exchange(plan_of('SELECT * FROM attributes LIMIT 3'))
+    converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'X-Result-Page-Limit': '2'}))
+    assert exchange.result == [{'id': 1}]
+
+
 def test_describe_and_show_tables():
     describe = Exchange(plan_of('DESCRIBE attributes'))
     assert converse(describe, ok(as_json(SUPPORTED))) == [SUPPORT_CHECK]

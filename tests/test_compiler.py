@@ -70,12 +70,6 @@ ALL_TABLES = ('attributes, events, objects, galaxy_clusters, event_reports, note
      'add a WHERE or a LIMIT: MISP takes no search without either'),
     ('SELECT * FROM events WHERE id = 1 OFFSET 10', '10', 'OFFSET needs a LIMIT'),
     ('SELECT * FROM events LIMIT 0', '0', 'LIMIT must be at least 1'),
-    ('SELECT * FROM events ORDER BY info LIMIT 1', 'info',
-     'cannot sort events by info; use id, event_id, eventinfo, analysis, threat_level_id, '
-     'distribution, timestamp, event_timestamp, publish_timestamp'),
-    ('SELECT * FROM attributes ORDER BY Event.publish_timestamp LIMIT 1', 'Event.publish_timestamp',
-     'cannot sort attributes by event.publish_timestamp; use id, event_id, object_id, type, category, value, '
-     'distribution, timestamp, object_relation, publish_timestamp'),
     ('SELECT * FROM attributes ORDER BY attributes.id, events.id LIMIT 1', 'events.id',
      'events is not the table queried here (attributes)'),
     ('SELECT * FROM objects ORDER BY id DESC LIMIT 1', 'id DESC', 'objects cannot be sorted'),
@@ -106,6 +100,17 @@ def test_query_names_in_column_lists_become_row_keys():
             assert plan.columns == ['id', key], (table.name, name)
     plan = compile_one("SELECT eventinfo, meta.org FROM events WHERE eventinfo = 'x' LIMIT 1")
     assert (plan.columns, plan.body['query']) == (['info', 'meta.org'], {'eventinfo': 'x'})
+
+
+@pytest.mark.parametrize('table, names, wire_name', [
+    ('events', ('info', 'eventinfo', 'events.info'), 'info'),
+    ('attributes', ('Event.publish_timestamp', '`Event.publish_timestamp`', 'publish_timestamp'),
+     'Event.publish_timestamp'),
+])
+def test_order_accepts_misp_discovery_names_and_existing_aliases(table, names, wire_name):
+    for name in names:
+        plan = compile_one(f'SELECT * FROM {table} ORDER BY {name} DESC LIMIT 1')
+        assert plan.body['order'] == [f'{wire_name} desc']
 
 
 @pytest.mark.parametrize('text, metadata', [

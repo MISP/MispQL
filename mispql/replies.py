@@ -158,6 +158,7 @@ class Exchange:
             return _count(plan, reply)
         if plan.output == 'verbatim':
             _accepted(reply)
+            check_page_limit(plan, reply.headers)
             return reply.body
         rows = _rows(plan, reply)
         if plan.skip:
@@ -183,6 +184,7 @@ def _accepted(reply):
 
 def _rows(plan, reply):
     _accepted(reply)
+    check_page_limit(plan, reply.headers)
     key = TABLES[plan.table].row_key
     try:
         found = json.loads(reply.body)['response']
@@ -240,6 +242,26 @@ def _text(body):
 def _header(headers, name):
     name = name.lower()
     return next((value for key, value in headers.items() if key.lower() == name), None)
+
+
+def check_page_limit(plan, headers):
+    # A smaller server limit changes where the requested page or client-side
+    # slice starts. Older MISP versions do not report this header.
+    requested = plan.body.get('limit')
+    if requested is None or (not plan.skip and plan.body.get('page', 1) == 1):
+        return
+    applied = _header(headers, 'X-Result-Page-Limit')
+    if applied is None:
+        return
+    try:
+        applied = int(applied)
+    except (TypeError, ValueError):
+        raise ClientError(f'{plan.endpoint}: invalid X-Result-Page-Limit') from None
+    if applied <= 0:
+        raise ClientError(f'{plan.endpoint}: invalid X-Result-Page-Limit')
+    if applied != requested:
+        raise ClientError(f'{plan.endpoint}: MISP applied LIMIT {applied} instead of {requested}; '
+                          f'use LIMIT {applied} or smaller with OFFSET')
 
 
 def flatten(row, prefix=''):
