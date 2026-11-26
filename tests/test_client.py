@@ -135,6 +135,12 @@ def test_verbatim_format_returns_the_response(stub):
     assert stub.requests[0]['body']['returnFormat'] == 'csv'
 
 
+def test_verbatim_offset_does_not_stream_the_wrong_page(stub):
+    stub.reply(b'uuid,value\n', headers={'Content-Type': 'text/csv', 'X-Result-Page-Limit': '2'})
+    with pytest.raises(ClientError, match=r'MISP applied LIMIT 2 instead of 3'):
+        client(stub.url).run(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 3 FORMAT csv'))
+
+
 def test_counts(stub):
     stub.reply({'response': [{'Event': {'id': '1'}}]}, headers={'X-Result-Count': '6375'})
     stub.reply(b'73890')
