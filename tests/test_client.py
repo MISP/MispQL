@@ -3,6 +3,7 @@ import socket
 from pathlib import Path
 
 import pytest
+import requests
 
 from mispql import __version__
 from mispql.client import Client, ClientError, QueryErrors
@@ -135,10 +136,14 @@ def test_verbatim_format_returns_the_response(stub):
     assert stub.requests[0]['body']['returnFormat'] == 'csv'
 
 
-def test_verbatim_offset_does_not_stream_the_wrong_page(stub):
+def test_verbatim_offset_does_not_stream_the_wrong_page(stub, monkeypatch):
+    closed = []
+    close = requests.Response.close
+    monkeypatch.setattr(requests.Response, 'close', lambda self: (closed.append(self.url), close(self)))
     stub.reply(b'uuid,value\n', headers={'Content-Type': 'text/csv', 'X-Result-Page-Limit': '2'})
     with pytest.raises(ClientError, match=r'MISP applied LIMIT 2 instead of 3'):
         client(stub.url).run(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 3 FORMAT csv'))
+    assert closed == [f'{stub.url}/attributes/restSearch']
 
 
 def test_counts(stub):

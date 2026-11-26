@@ -155,6 +155,20 @@ def test_offset_rejects_a_server_page_limit_that_changes_the_slice(offset, forma
     assert exchange.result is None
 
 
+@pytest.mark.parametrize('applied', ['abc', '0', '-1'])
+def test_offset_rejects_an_invalid_server_page_limit(applied):
+    exchange = Exchange(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 3'))
+    with pytest.raises(ClientError, match=r'^/attributes/restSearch: invalid X-Result-Page-Limit$'):
+        converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'X-Result-Page-Limit': applied}))
+
+
+def test_offset_accepts_a_server_page_limit_equal_to_limit():
+    exchange = Exchange(plan_of('SELECT * FROM attributes LIMIT 3 OFFSET 4'))
+    pages = [{'response': {'Attribute': [{'id': i} for i in ids]}} for ids in ((3, 4, 5), (6,))]
+    converse(exchange, *[ok(as_json(page), {'X-Result-Page-Limit': '3'}) for page in pages])
+    assert exchange.result == [{'id': 4}, {'id': 5}, {'id': 6}]
+
+
 def test_first_page_can_use_a_smaller_server_limit():
     exchange = Exchange(plan_of('SELECT * FROM attributes LIMIT 3'))
     converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'X-Result-Page-Limit': '2'}))
