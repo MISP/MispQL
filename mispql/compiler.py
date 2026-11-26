@@ -206,13 +206,13 @@ class _Select:
     def order(self):
         table = self.table
         rules = []
+        # MISP's own sort names, as written or as the lexer lowercases them unquoted.
+        wire = {s: field for field in table.sortable.values() for s in (field, field.lower())}
         for i, item in enumerate(self.stmt.order):
             if not table.sortable:
                 raise MispQLError(f'{table.name} cannot be sorted', item.start, item.end)
             name = self.field(item.field)
-            sort_name = table.sortable.get(name)
-            if sort_name is None:
-                sort_name = next((field for field in table.sortable.values() if name in (field, field.lower())), None)
+            sort_name = table.sortable.get(name) or wire.get(name)
             if sort_name is None:
                 raise MispQLError(
                     f'cannot sort {table.name} by {name}; use {", ".join(table.sortable)}',
