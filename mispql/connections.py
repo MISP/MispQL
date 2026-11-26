@@ -98,7 +98,7 @@ class Connections:
                 pass
         if not settings.key and not starting:
             raise config.ConfigError(f'{settings.name}: no API key in the config')
-        return Client(settings, trace=self.trace)
+        return Client(settings, trace=self.trace, warn=self.warn)
 
 
 def describe(name, identity):

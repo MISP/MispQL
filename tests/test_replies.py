@@ -170,10 +170,23 @@ def test_offset_accepts_a_server_page_limit_equal_to_limit():
     assert exchange.result == [{'id': 4}, {'id': 5}, {'id': 6}]
 
 
-def test_first_page_can_use_a_smaller_server_limit():
-    exchange = Exchange(plan_of('SELECT * FROM attributes LIMIT 3'))
-    converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'X-Result-Page-Limit': '2'}))
-    assert exchange.result == [{'id': 1}]
+@pytest.mark.parametrize('text, body, result', [
+    ('SELECT * FROM attributes LIMIT 3', b'{"response": {"Attribute": [{"id": 1}]}}', [{'id': 1}]),
+    ('SELECT * FROM attributes LIMIT 3 FORMAT csv', b'id\n1\n', b'id\n1\n'),
+])
+def test_first_page_can_use_a_smaller_server_limit_with_a_warning(text, body, result):
+    exchange = Exchange(plan_of(text))
+    converse(exchange, ok(body, {'X-Result-Page-Limit': '2'}))
+    assert (exchange.result, exchange.warnings) == (result, ["MISP capped LIMIT 3 at 2 rows for this key's role"])
+    exchange = Exchange(plan_of(text))
+    converse(exchange, ok(body))
+    assert (exchange.result, exchange.warnings) == (result, [])
+
+
+def test_a_search_without_limit_warns_when_misp_caps_it():
+    exchange = Exchange(plan_of('SELECT * FROM attributes WHERE id > 0'), check_support=False)
+    converse(exchange, ok(b'{"response": {"Attribute": [{"id": 1}]}}', {'X-Result-Page-Limit': '100'}))
+    assert exchange.warnings == ["MISP capped the search at 100 rows for this key's role"]
 
 
 def test_describe_and_show_tables():

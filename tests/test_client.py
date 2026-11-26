@@ -146,6 +146,21 @@ def test_verbatim_offset_does_not_stream_the_wrong_page(stub, monkeypatch):
     assert closed == [f'{stub.url}/attributes/restSearch']
 
 
+def test_a_capped_first_page_is_returned_with_a_warning(stub):
+    warnings = []
+    c = Client(Settings(url=stub.url, key='the-key'), warn=warnings.append)
+    stub.reply({'response': {'Attribute': [{'id': '1'}]}}, headers={'X-Result-Page-Limit': '2'})
+    assert c.run(plan_of('SELECT * FROM attributes LIMIT 3')) == [{'id': '1'}]
+    stub.reply(b'id\n1\n', headers={'Content-Type': 'text/csv', 'X-Result-Page-Limit': '2'})
+    assert c.run(plan_of('SELECT * FROM attributes LIMIT 3 FORMAT csv')).content == b'id\n1\n'
+    assert warnings == ["MISP capped LIMIT 3 at 2 rows for this key's role"] * 2
+    stub.reply({'response': {'Attribute': [{'id': '1'}]}})
+    stub.reply(b'id\n1\n', headers={'Content-Type': 'text/csv'})
+    c.run(plan_of('SELECT * FROM attributes LIMIT 3'))
+    c.run(plan_of('SELECT * FROM attributes LIMIT 3 FORMAT csv'))
+    assert len(warnings) == 2
+
+
 def test_counts(stub):
     stub.reply({'response': [{'Event': {'id': '1'}}]}, headers={'X-Result-Count': '6375'})
     stub.reply(b'73890')

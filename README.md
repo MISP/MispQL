@@ -346,7 +346,8 @@ WHOAMI;
   50 conditions and operators, 100 values in one `IN`. `DESCRIBE` shows the
   limits in effect.
 - MISP can cap the number of rows per request by role. When MISP reports a
-  cap below the requested `LIMIT`, MispQL rejects queries with a positive
+  cap below the requested `LIMIT`, or on a search without `LIMIT`, MispQL
+  returns the first page with a warning, and rejects queries with a positive
   `OFFSET` because the cap changes the meaning of the page. Use the reported
   limit or a smaller one.
 
@@ -457,7 +458,8 @@ print(exchange.result)
   page for an `OFFSET` that is not a multiple of `LIMIT`, every discovery
   endpoint for `SHOW TABLES`. Its result is what the command line prints from:
   a count, a list of rows, a table's fields and the limits, the tables
-  answering, or for MISP's own formats the body as received.
+  answering, or for MISP's own formats the body as received. Its `warnings`
+  say when MISP capped the page size for the key's role.
 - A plan with a `WHERE` first asks `SUPPORT_CHECK`, and anything but a list of
   tables raises `NoComplexQueries`, whose `status` is that answer's.
   `Exchange(plan, check_support=False)` leaves the check out, for a caller that

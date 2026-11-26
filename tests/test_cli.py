@@ -248,6 +248,12 @@ def test_output_warnings_go_to_stderr(misp, run):
     assert (code, out, err) == (0, 'id,nosuch\n1,\n', 'WARNING: no row has a column nosuch\n')
 
 
+def test_a_capped_first_page_warns_on_stderr(misp, run):
+    misp.reply(ROWS, headers={'X-Result-Page-Limit': '2'})
+    code, out, err = run('-e', 'SELECT id FROM attributes LIMIT 3 FORMAT flat')
+    assert (code, out, err) == (0, 'id\n1\n', "WARNING: MISP capped LIMIT 3 at 2 rows for this key's role\n")
+
+
 def test_interrupt(misp, run, monkeypatch):
     def interrupted(self, plan):
         raise KeyboardInterrupt

@@ -11,11 +11,12 @@ WHOAMI = '/users/view/me'
 
 
 class Client:
-    def __init__(self, settings, session=None, trace=None):
+    def __init__(self, settings, session=None, trace=None, warn=None):
         if not settings.key:
             raise ClientError('no API key: set key in a config file, MISPQL_KEY or --key-file')
         self.settings = settings
         self.trace = trace  # called with method, URL and body before each request
+        self.warn = warn or (lambda message: None)  # called with each warning about a result
         self.session = session or requests.Session()
         self.session.headers.update({
             'Authorization': settings.key,
@@ -34,16 +35,20 @@ class Client:
         if isinstance(plan, SearchPlan) and plan.output == 'verbatim':
             response = self.send('POST', plan.endpoint, plan.body, stream=True)
             try:
-                check_page_limit(plan, response.headers)
+                warning = check_page_limit(plan, response.headers)
             except ClientError:
                 response.close()
                 raise
+            if warning:
+                self.warn(warning)
             return response
         exchange = Exchange(plan, check_support=False)
         while not exchange.done:
             request = exchange.request
             response = self.request(request.method, request.path, request.body)
             exchange.receive(response.status_code, response.headers, response.content)
+        for warning in exchange.warnings:
+            self.warn(warning)
         return exchange.result
 
     def check_support(self):

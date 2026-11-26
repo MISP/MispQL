@@ -115,7 +115,8 @@ class Exchange:
     the body as received; for DESCRIBE the table's fields and the limits; for SHOW TABLES
     the tables answering. `receive` raises QueryErrors for a 400 listing what is wrong with
     the query, and ClientError when MISP refused a request or answered in an unexpected
-    shape.
+    shape. `warnings` says what the result may lack: MISP capped a search's page size for
+    the key's role.
 
     A plan with a WHERE first asks SUPPORT_CHECK, and goes on only when MISP lists its
     tables (NoComplexQueries otherwise): a MISP without complex queries would ignore the
@@ -130,6 +131,7 @@ class Exchange:
         self.request = None  # the request to send next; None once the result is known
         self.done = False
         self.result = None
+        self.warnings = []  # about the result: MISP capped the page size for the key's role
         self.supported = False  # MISP answered SUPPORT_CHECK with its tables
         self._steps = self._exchange(plan, check_support)
         self.request = next(self._steps)
@@ -156,16 +158,20 @@ class Exchange:
         reply = yield Request('POST', plan.endpoint, plan.body)
         if isinstance(plan, CountPlan):
             return _count(plan, reply)
+        _accepted(reply)
+        if warning := check_page_limit(plan, reply.headers):
+            self.warnings.append(warning)
         if plan.output == 'verbatim':
-            _accepted(reply)
-            check_page_limit(plan, reply.headers)
             return reply.body
         rows = _rows(plan, reply)
         if plan.skip:
             limit = plan.body['limit']
             if len(rows) == limit:
                 body = {**plan.body, 'page': plan.body['page'] + 1}
-                rows += _rows(plan, (yield Request('POST', plan.endpoint, body)))
+                reply = yield Request('POST', plan.endpoint, body)
+                _accepted(reply)
+                check_page_limit(plan, reply.headers)
+                rows += _rows(plan, reply)
             rows = rows[plan.skip:plan.skip + limit]
         return rows
 
@@ -183,8 +189,6 @@ def _accepted(reply):
 
 
 def _rows(plan, reply):
-    _accepted(reply)
-    check_page_limit(plan, reply.headers)
     key = TABLES[plan.table].row_key
     try:
         found = json.loads(reply.body)['response']
@@ -245,23 +249,26 @@ def _header(headers, name):
 
 
 def check_page_limit(plan, headers):
-    # A smaller server limit changes where the requested page or client-side
-    # slice starts. Older MISP versions do not report this header.
-    requested = plan.body.get('limit')
-    if requested is None or (not plan.skip and plan.body.get('page', 1) == 1):
-        return
+    """A warning when MISP capped the page size of a search without OFFSET, None when it did not;
+    ClientError when the cap moves the page an OFFSET asks for."""
+    # Older MISP versions do not report this header.
     applied = _header(headers, 'X-Result-Page-Limit')
     if applied is None:
-        return
+        return None
     try:
         applied = int(applied)
     except (TypeError, ValueError):
         raise ClientError(f'{plan.endpoint}: invalid X-Result-Page-Limit') from None
     if applied <= 0:
         raise ClientError(f'{plan.endpoint}: invalid X-Result-Page-Limit')
-    if applied != requested:
+    requested = plan.body.get('limit')
+    if applied == requested:
+        return None
+    if plan.skip or plan.body.get('page', 1) > 1:
         raise ClientError(f"{plan.endpoint}: this key's role allows at most {applied} rows per request "
                           f'(LIMIT {requested} asked); use LIMIT {applied} or smaller with OFFSET')
+    asked = f'LIMIT {requested}' if requested else 'the search'
+    return f"MISP capped {asked} at {applied} rows for this key's role"
 
 
 def flatten(row, prefix=''):
