@@ -261,7 +261,7 @@ def test_interrupt(misp, run, monkeypatch):
      ['-e', 'SELECT * FROM attributes LIMIT 20000']),
     # Output left in sys.stdout's own buffer: only the dup2 keeps the exit flush quiet.
     (None, ['--dry-run', '-e', 'SELECT * FROM attributes LIMIT 1;' * 3000]),
-])
+], ids=['csv-1mb', 'json-20000-rows', 'dry-run-3000-statements'])
 def test_broken_pipe_ends_quietly(stub, tmp_path, reply, argv):
     if reply is not None:
         stub.reply(reply)
